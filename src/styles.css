@@ -117,7 +117,23 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  padding: 25px 15px 18px;
+  padding: 13px 15px 18px;
+}
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-height: 34px;
+  padding-left: 10px;
+  margin-bottom: 27px;
+}
+.sidebar-toggle {
+  color: var(--muted-foreground);
+}
+.sidebar-toggle svg {
+  width: 18px;
+  height: 18px;
 }
 .app-brand {
   font-size: 19px;
@@ -126,7 +142,6 @@
   gap: 10px;
   align-items: center;
   color: var(--foreground);
-  padding: 0 10px 27px;
   text-decoration: none;
 }
 .app-brand svg {
@@ -282,6 +297,12 @@
   height: 60px;
   padding: 0 29px;
   border-bottom: 1px solid var(--border);
+}
+.desktop-topbar-start {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
 }
 .desktop-topbar-repo {
   display: flex;
@@ -1043,18 +1064,8 @@
   color: var(--muted-foreground);
   margin-bottom: 20px;
 }
-.focus-mode {
+.review-app.sidebar-collapsed {
   grid-template-columns: minmax(0, 1fr);
-}
-.focus-mode .desktop-sidebar,
-.focus-mode .pr-overview {
-  display: none;
-}
-.focus-mode .review-main {
-  max-width: 1000px;
-}
-.focus-mode .workspace-topbar {
-  justify-content: flex-end;
 }
 @media (min-width: 1500px) {
   .review-app {
@@ -1100,8 +1111,7 @@
     grid-template-columns: minmax(0, 1fr);
   }
   .desktop-sidebar,
-  .desktop-topbar-repo,
-  .focus-action,
+  .desktop-topbar-start,
   .ask-action {
     display: none;
   }
@@ -1345,9 +1355,6 @@
   }
   .coverage-item strong {
     font-size: 12px;
-  }
-  .focus-mode .mobile-flow-picker {
-    display: none;
   }
   .review-sidebar-content {
     min-height: 0;

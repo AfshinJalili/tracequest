@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewPage } from '@/features/review/review-page';
@@ -25,6 +25,33 @@ beforeEach(() => {
   );
 });
 describe('review application', () => {
+  it('closes and reopens the sidebar with icon controls while keeping the review available', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    const sidebar = screen.getByRole('complementary');
+    const close = within(sidebar).getByRole('button', { name: 'Close sidebar' });
+    expect(close).toHaveAttribute('aria-expanded', 'true');
+    expect(close).toHaveTextContent('');
+    expect(screen.queryByRole('button', { name: /^(Exit focus|Focus)$/ })).toBeNull();
+
+    await user.click(close);
+    const open = screen.getByRole('button', { name: 'Open sidebar' });
+    expect(sidebar).not.toBeVisible();
+    expect(open).toHaveAttribute('aria-expanded', 'false');
+    expect(open).toHaveFocus();
+    expect(screen.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Review & next' })).toBeDisabled();
+
+    await user.click(open);
+    expect(sidebar).toBeVisible();
+    expect(within(sidebar).getByRole('button', { name: 'Close sidebar' })).toHaveFocus();
+    await user.keyboard('f');
+    expect(screen.getByRole('button', { name: 'Open sidebar' })).toHaveFocus();
+    await user.keyboard('f');
+    expect(within(sidebar).getByRole('button', { name: 'Close sidebar' })).toHaveFocus();
+  });
   it('loads the actual demo and gates inspection on every code block', async () => {
     const user = userEvent.setup();
     mount();

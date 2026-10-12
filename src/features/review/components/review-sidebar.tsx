@@ -1,4 +1,5 @@
 import { GitBranch, HardDrive, Settings2 } from 'lucide-react';
+import { type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { FlowList } from './flow-list';
@@ -10,19 +11,24 @@ export function ReviewSidebar({
   onScreen,
   onSelect,
   onSettings,
+  sidebarToggle,
 }: {
   view: ReviewView;
   screen: ReviewScreen;
   onScreen: (screen: ReviewScreen) => void;
   onSelect: (position: Position) => void;
   onSettings: () => void;
+  sidebarToggle: ReactNode;
 }) {
   return (
     <div className="review-sidebar-content">
-      <a className="app-brand" href="#/">
-        <GitBranch />
-        TraceQuest
-      </a>
+      <div className="sidebar-header">
+        <a className="app-brand" href="#/">
+          <GitBranch />
+          TraceQuest
+        </a>
+        {sidebarToggle}
+      </div>
       <div className="repository-context">
         <span>{view.repo}</span>
         <small>{view.sourceLabel}</small>

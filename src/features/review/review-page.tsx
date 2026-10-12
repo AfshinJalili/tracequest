@@ -6,12 +6,14 @@ import {
   LoaderCircle,
   MessageSquare,
   PanelLeftClose,
+  PanelLeftOpen,
   Settings2,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +47,7 @@ export function ReviewPage() {
   const review = useReview(),
     { view, session } = review;
   const [screen, setScreen] = useState<ReviewScreen>('review'),
-    [focus, setFocus] = useState(false),
+    [sidebarOpen, setSidebarOpen] = useState(true),
     [showAi, setShowAi] = useState(false),
     [sheet, setSheet] = useState(false),
     [importOpen, setImportOpen] = useState(false),
@@ -56,6 +58,18 @@ export function ReviewPage() {
     [prompt, setPrompt] = useState<PromptRequest | null>(null),
     [mapping, setMapping] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
+  const sidebarButton = useRef<HTMLButtonElement>(null);
+  const restoreSidebarFocus = useRef(false);
+  const toggleSidebar = useCallback(() => {
+    restoreSidebarFocus.current = true;
+    setSidebarOpen((value) => !value);
+  }, []);
+  useEffect(() => {
+    if (restoreSidebarFocus.current) {
+      sidebarButton.current?.focus();
+      restoreSidebarFocus.current = false;
+    }
+  }, [sidebarOpen]);
   const currentPack = useRef(session?.pack.id);
   currentPack.current = session?.pack.id;
   useEffect(() => () => request.current?.abort(), []);
@@ -77,7 +91,7 @@ export function ReviewPage() {
       if (importOpen || settingsOpen || flagOpen || modelsOpen || prompt || sheet) return;
       if (event.key.toLowerCase() === 'f') {
         event.preventDefault();
-        setFocus((value) => !value);
+        toggleSidebar();
       }
       if (event.key.toLowerCase() === 'j' && view?.next) {
         event.preventDefault();
@@ -90,7 +104,17 @@ export function ReviewPage() {
     }
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [view, review.select, importOpen, settingsOpen, flagOpen, modelsOpen, prompt, sheet]);
+  }, [
+    view,
+    review.select,
+    importOpen,
+    settingsOpen,
+    flagOpen,
+    modelsOpen,
+    prompt,
+    sheet,
+    toggleSidebar,
+  ]);
   async function generate() {
     if (!session) return;
     if (!settings) {
@@ -133,46 +157,66 @@ export function ReviewPage() {
         <Button onClick={review.loadDemo}>Load demo</Button>
       </main>
     );
+  const sidebarLabel = sidebarOpen ? 'Close sidebar' : 'Open sidebar';
+  const sidebarToggle = (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={sidebarButton}
+          variant="ghost"
+          size="icon-sm"
+          className="sidebar-toggle"
+          aria-label={sidebarLabel}
+          aria-expanded={sidebarOpen}
+          aria-controls="review-sidebar"
+          onClick={toggleSidebar}
+        >
+          {sidebarOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{sidebarLabel}</TooltipContent>
+    </Tooltip>
+  );
   return (
-    <div className={cn('review-app', focus && 'focus-mode')}>
-      <aside className="desktop-sidebar">
+    <div className={cn('review-app', !sidebarOpen && 'sidebar-collapsed')}>
+      <aside id="review-sidebar" className="desktop-sidebar" hidden={!sidebarOpen}>
         <ReviewSidebar
           view={view}
           screen={screen}
           onScreen={setScreen}
           onSelect={select}
           onSettings={() => setSettingsOpen(true)}
+          sidebarToggle={sidebarOpen ? sidebarToggle : null}
         />
       </aside>
       <div className="review-workspace">
         <header className="workspace-topbar">
-          <div className="desktop-topbar-repo">
-            <strong>{view.repo}</strong>
-            <span>{view.sourceLabel}</span>
+          <div className="desktop-topbar-start">
+            {!sidebarOpen ? sidebarToggle : null}
+            <div className="desktop-topbar-repo">
+              <strong>{view.repo}</strong>
+              <span>{view.sourceLabel}</span>
+            </div>
           </div>
           <a href="#/" className="mobile-app-brand">
             <GitBranch />
             TraceQuest
           </a>
           <div className="topbar-actions">
-            <Button
-              variant="ghost"
-              className="focus-action"
-              onClick={() => setFocus((value) => !value)}
-              aria-pressed={focus}
-            >
-              <PanelLeftClose />
-              {focus ? 'Exit focus' : 'Focus'}
-            </Button>
-            <Button
-              variant="outline"
-              className="ask-action"
-              onClick={() => setShowAi((value) => !value)}
-              aria-pressed={showAi}
-            >
-              <MessageSquare />
-              Ask AI
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  className="ask-action"
+                  onClick={() => setShowAi((value) => !value)}
+                  aria-pressed={showAi}
+                >
+                  <MessageSquare />
+                  Ask AI
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Ask about this step’s code</TooltipContent>
+            </Tooltip>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon-sm" aria-label="Review actions">
