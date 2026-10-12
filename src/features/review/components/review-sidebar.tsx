@@ -69,7 +69,7 @@ export function ReviewSidebar({
         </div>
         <Button variant="ghost" className="sidebar-settings" onClick={onSettings}>
           <Settings2 />
-          AI settings
+          Settings
         </Button>
       </div>
     </div>

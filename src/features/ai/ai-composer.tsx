@@ -1,5 +1,5 @@
 import { ArrowUp, Copy, Settings2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { REVIEW_SYSTEM, stepContext, type ReviewSession, type ReviewStep } from '@/domains/review';
@@ -11,12 +11,14 @@ export function AiComposer({
   settings,
   onSettings,
   onPrompt,
+  questionInput,
 }: {
   session: ReviewSession;
   step: ReviewStep;
   settings: ModelSettings | null;
   onSettings: () => void;
   onPrompt: (request: PromptRequest) => void;
+  questionInput: RefObject<HTMLTextAreaElement | null>;
 }) {
   const [question, setQuestion] = useState(''),
     [answer, setAnswer] = useState(''),
@@ -76,6 +78,8 @@ export function AiComposer({
         }}
       >
         <Textarea
+          ref={questionInput}
+          autoFocus
           aria-label="Question about this step"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}

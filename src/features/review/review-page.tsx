@@ -28,15 +28,17 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { mappingPrompt, reviewReport, type Position } from '@/domains/review';
+import { mappingPrompt, reviewReport, type Position, type StepId } from '@/domains/review';
 import { downloadText } from '@/integrations/files';
 import { mapWithModel, type ModelSettings } from '@/integrations/model';
 import { ModelSettingsDialog } from '@/features/ai/model-settings-dialog';
 import { PromptDialog, type PromptRequest } from '@/features/ai/prompt-dialog';
 import { ImportDialog } from '@/features/import/import-dialog';
+import { SettingsDialog } from '@/features/settings/settings-dialog';
+import { usePreferences } from '@/features/settings/use-preferences';
 import { ReviewSidebar, type ReviewScreen } from './components/review-sidebar';
 import { FlowList } from './components/flow-list';
-import { StepView } from './components/step-view';
+import { StepView, type StepDetailTab } from './components/step-view';
 import { CoverageView } from './components/coverage-view';
 import { NotesView } from './components/notes-view';
 import { FlagDialog } from './components/flag-dialog';
@@ -46,18 +48,21 @@ import { cn } from '@/lib/utils';
 export function ReviewPage() {
   const review = useReview(),
     { view, session } = review;
+  const { preferences, setKeyboardShortcuts } = usePreferences();
   const [screen, setScreen] = useState<ReviewScreen>('review'),
     [sidebarOpen, setSidebarOpen] = useState(true),
-    [showAi, setShowAi] = useState(false),
+    [detail, setDetail] = useState<{ step: StepId; tab: StepDetailTab } | null>(null),
     [sheet, setSheet] = useState(false),
     [importOpen, setImportOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
+    [preferencesOpen, setPreferencesOpen] = useState(false),
     [flagOpen, setFlagOpen] = useState(false),
     [modelsOpen, setModelsOpen] = useState(false),
     [settings, setSettings] = useState<ModelSettings | null>(null),
     [prompt, setPrompt] = useState<PromptRequest | null>(null),
     [mapping, setMapping] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
+  const questionInput = useRef<HTMLTextAreaElement>(null);
   const sidebarButton = useRef<HTMLButtonElement>(null);
   const restoreSidebarFocus = useRef(false);
   const toggleSidebar = useCallback(() => {
@@ -79,16 +84,35 @@ export function ReviewPage() {
     setSheet(false);
   };
   useEffect(() => {
+    if (!preferences.keyboardShortcuts) return;
     function key(event: KeyboardEvent) {
       if (
+        event.defaultPrevented ||
+        event.isComposing ||
         event.ctrlKey ||
         event.metaKey ||
         event.altKey ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest('input,textarea,select,[role="dialog"]'))
+        event
+          .composedPath()
+          .some(
+            (target) =>
+              target instanceof Element &&
+              target.closest(
+                'input,textarea,select,[contenteditable]:not([contenteditable="false"]),[role="textbox"],[role="combobox"],[role="dialog"],[role="menu"]',
+              ),
+          )
       )
         return;
-      if (importOpen || settingsOpen || flagOpen || modelsOpen || prompt || sheet) return;
+      if (
+        importOpen ||
+        settingsOpen ||
+        preferencesOpen ||
+        flagOpen ||
+        modelsOpen ||
+        prompt ||
+        sheet
+      )
+        return;
       if (event.key.toLowerCase() === 'f') {
         event.preventDefault();
         toggleSidebar();
@@ -109,6 +133,8 @@ export function ReviewPage() {
     review.select,
     importOpen,
     settingsOpen,
+    preferencesOpen,
+    preferences.keyboardShortcuts,
     flagOpen,
     modelsOpen,
     prompt,
@@ -158,6 +184,10 @@ export function ReviewPage() {
       </main>
     );
   const sidebarLabel = sidebarOpen ? 'Close sidebar' : 'Open sidebar';
+  const detailTab = detail?.step === view.step.id ? detail.tab : 'code';
+  const selectDetail = (tab: StepDetailTab) => {
+    setDetail({ step: view.step.id, tab });
+  };
   const sidebarToggle = (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -185,7 +215,7 @@ export function ReviewPage() {
           screen={screen}
           onScreen={setScreen}
           onSelect={select}
-          onSettings={() => setSettingsOpen(true)}
+          onSettings={() => setPreferencesOpen(true)}
           sidebarToggle={sidebarOpen ? sidebarToggle : null}
         />
       </aside>
@@ -208,8 +238,12 @@ export function ReviewPage() {
                 <Button
                   variant="outline"
                   className="ask-action"
-                  onClick={() => setShowAi((value) => !value)}
-                  aria-pressed={showAi}
+                  onClick={() => {
+                    setScreen('review');
+                    selectDetail('ask');
+                    questionInput.current?.focus();
+                  }}
+                  aria-pressed={screen === 'review' && detailTab === 'ask'}
                 >
                   <MessageSquare />
                   Ask AI
@@ -246,9 +280,9 @@ export function ReviewPage() {
                   <Download />
                   Export review file
                 </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => setSettingsOpen(true)}>
+                <DropdownMenuItem onSelect={() => setPreferencesOpen(true)}>
                   <Settings2 />
-                  AI settings
+                  Settings
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -319,7 +353,9 @@ export function ReviewPage() {
               onSettings={() => setSettingsOpen(true)}
               onPrompt={setPrompt}
               onFlag={() => setFlagOpen(true)}
-              showAi={showAi}
+              detailTab={detailTab}
+              onDetailTabChange={selectDetail}
+              questionInput={questionInput}
             />
           ) : screen === 'coverage' ? (
             <CoverageView
@@ -342,6 +378,16 @@ export function ReviewPage() {
           setScreen('review');
         }}
         onDemo={review.loadDemo}
+      />
+      <SettingsDialog
+        open={preferencesOpen}
+        onOpenChange={setPreferencesOpen}
+        preferences={preferences}
+        onKeyboardShortcuts={setKeyboardShortcuts}
+        onModelSettings={() => {
+          setPreferencesOpen(false);
+          setSettingsOpen(true);
+        }}
       />
       <ModelSettingsDialog
         open={settingsOpen}

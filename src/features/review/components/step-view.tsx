@@ -1,5 +1,5 @@
 import { ArrowLeft, ArrowRight, Flag, StickyNote } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,20 +10,25 @@ import { type PromptRequest } from '@/features/ai/prompt-dialog';
 import { AiComposer } from '@/features/ai/ai-composer';
 import { StepNavigator } from './step-navigator';
 import { ContextCode, EvidenceCode } from './code-block';
+export type StepDetailTab = 'summary' | 'code' | 'ask';
 export function StepView({
   review,
   settings,
   onSettings,
   onPrompt,
   onFlag,
-  showAi,
+  detailTab,
+  onDetailTabChange,
+  questionInput,
 }: {
   review: ReviewController;
   settings: ModelSettings | null;
   onSettings: () => void;
   onPrompt: (request: PromptRequest) => void;
   onFlag: () => void;
-  showAi: boolean;
+  detailTab: StepDetailTab;
+  onDetailTabChange: (tab: StepDetailTab) => void;
+  questionInput: RefObject<HTMLTextAreaElement | null>;
 }) {
   const { view, session } = review;
   const [noteOpen, setNoteOpen] = useState(false);
@@ -58,7 +63,14 @@ export function StepView({
           <span key={entity}>{entity}</span>
         ))}
       </div>
-      <Tabs key={view.step.id} defaultValue="code" className="step-detail-tabs">
+      <Tabs
+        key={view.step.id}
+        value={detailTab}
+        onValueChange={(tab) => {
+          if (tab === 'summary' || tab === 'code' || tab === 'ask') onDetailTabChange(tab);
+        }}
+        className="step-detail-tabs"
+      >
         <TabsList className="step-tabs">
           <TabsTrigger value="summary">Summary</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>
@@ -96,20 +108,10 @@ export function StepView({
             settings={settings}
             onSettings={onSettings}
             onPrompt={onPrompt}
+            questionInput={questionInput}
           />
         </TabsContent>
       </Tabs>
-      {showAi ? (
-        <div className="desktop-ai">
-          <AiComposer
-            session={session}
-            step={view.step}
-            settings={settings}
-            onSettings={onSettings}
-            onPrompt={onPrompt}
-          />
-        </div>
-      ) : null}
       <Collapsible
         open={noteOpen || Boolean(view.note)}
         onOpenChange={setNoteOpen}

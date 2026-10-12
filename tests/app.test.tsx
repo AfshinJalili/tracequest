@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewPage } from '@/features/review/review-page';
 import demo from '../public/demo.json';
 import { loadReview } from '@/persistence/review-storage';
+import { loadPreferences } from '@/persistence/preferences-storage';
 function mount() {
   return render(
     <TooltipProvider>
@@ -25,6 +26,92 @@ beforeEach(() => {
   );
 });
 describe('review application', () => {
+  it('disables every shortcut immediately and remembers the preference after remount', async () => {
+    const user = userEvent.setup();
+    const mounted = mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Settings' });
+    const shortcuts = within(settings).getByRole('switch', { name: 'Keyboard shortcuts' });
+    expect(shortcuts).toBeChecked();
+    await user.click(shortcuts);
+    expect(shortcuts).not.toBeChecked();
+    expect(loadPreferences()).toEqual({ kind: 'ready', preferences: { keyboardShortcuts: false } });
+    await user.click(within(settings).getByRole('button', { name: 'Close' }));
+    screen.getByRole('button', { name: 'Close sidebar' }).focus();
+    await user.keyboard('fjk');
+    expect(screen.getByRole('button', { name: 'Close sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeInTheDocument();
+
+    mounted.unmount();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    await user.click(screen.getByRole('button', { name: 'Settings' }));
+    expect(screen.getByRole('switch', { name: 'Keyboard shortcuts' })).not.toBeChecked();
+    await user.click(screen.getByRole('switch', { name: 'Keyboard shortcuts' }));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    screen.getByRole('button', { name: 'Close sidebar' }).focus();
+    await user.keyboard('j');
+    expect(screen.getByRole('heading', { name: 'Lock the owner, in order' })).toBeInTheDocument();
+  });
+  it('ignores annotation editors, shadow inputs, composition, and consumed key events', async () => {
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    render(
+      <div>
+        <div contentEditable aria-label="Annotation editor" role="textbox">
+          <span data-testid="annotation-text" />
+        </div>
+        <div data-testid="shadow-editor" />
+      </div>,
+    );
+    for (const key of ['f', 'j', 'k'])
+      fireEvent.keyDown(screen.getByTestId('annotation-text'), { key });
+
+    const shadow = screen.getByTestId('shadow-editor').attachShadow({ mode: 'open' });
+    const input = document.createElement('textarea');
+    shadow.append(input);
+    for (const key of ['f', 'j', 'k'])
+      fireEvent.keyDown(input, { key, bubbles: true, composed: true });
+    const sidebarButton = screen.getByRole('button', { name: 'Close sidebar' });
+    fireEvent.keyDown(sidebarButton, { key: 'j', isComposing: true });
+    const consumed = new KeyboardEvent('keydown', { key: 'j', bubbles: true, cancelable: true });
+    consumed.preventDefault();
+    fireEvent(sidebarButton, consumed);
+
+    expect(screen.getByRole('button', { name: 'Close sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeInTheDocument();
+    fireEvent.keyDown(sidebarButton, { key: 'j' });
+    expect(screen.getByRole('heading', { name: 'Lock the owner, in order' })).toBeInTheDocument();
+  });
+  it('opens and focuses one AI composer and supplies the selected code when no model is connected', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    const ask = screen.getByRole('button', { name: 'Ask AI' });
+    await user.click(ask);
+    expect(screen.getByRole('tab', { name: 'Ask AI' })).toHaveAttribute('aria-selected', 'true');
+    const question = screen.getByRole('textbox', { name: 'Question about this step' });
+    expect(question).toHaveFocus();
+    expect(screen.getAllByRole('textbox', { name: 'Question about this step' })).toHaveLength(1);
+    await user.type(question, 'Why lock the owner?');
+    await user.click(ask);
+    expect(question).toHaveFocus();
+    expect(question).toHaveValue('Why lock the owner?');
+    const composer = question.closest('form');
+    if (!composer) throw new Error('Question form is missing.');
+    await user.click(within(composer).getByRole('button', { name: 'Ask AI' }));
+    const context = screen.getByRole('dialog', { name: 'Copy context' });
+    const copied = within(context).getByRole('textbox', { name: 'Review context' });
+    if (!(copied instanceof HTMLTextAreaElement)) throw new Error('Review context is missing.');
+    expect(copied.value).toContain('Why lock the owner?');
+    expect(copied.value).toContain('active-order.service.ts');
+    await user.click(within(context).getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByRole('button', { name: 'Coverage' }));
+    await user.click(ask);
+    expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Question about this step' })).toHaveFocus();
+  });
   it('closes and reopens the sidebar with icon controls while keeping the review available', async () => {
     const user = userEvent.setup();
     mount();
