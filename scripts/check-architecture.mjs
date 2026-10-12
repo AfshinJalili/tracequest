@@ -16,13 +16,13 @@ for (const file of walk(root).filter((file) => /\.tsx?$/.test(file))) {
   const relative = path.relative(root, file).replaceAll('\\', '/'),
     source = fs.readFileSync(file, 'utf8'),
     ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true),
-    domain = relative.startsWith('domains/review/'),
+    domain = relative.startsWith('domains/'),
     adapter = relative.startsWith('integrations/') || relative.startsWith('persistence/');
   for (const statement of ast.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
       continue;
     const target = statement.moduleSpecifier.text;
-    if (!domain && target.startsWith('@/domains/review/'))
+    if (!domain && /^@\/domains\/[^/]+\//.test(target))
       failures.push(`${relative}: domain internals must be imported through its public contract`);
     if (domain && !target.startsWith('.') && target !== 'zod')
       failures.push(`${relative}: domain may import only its owner and schema validator`);
