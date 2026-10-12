@@ -1,0 +1,6 @@
+dist/
+node_modules/
+public/demo.json
+tests/fixtures/
+package-lock.json
+AGENTS.md

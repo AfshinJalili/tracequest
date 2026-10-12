@@ -1,0 +1,107 @@
+import { evidenceForStep } from './evidence';
+import { MAX_NOTE_CHARACTERS } from './schema';
+import {
+  type BlockId,
+  type Position,
+  type ReviewPack,
+  type ReviewSession,
+  type ReviewState,
+  type ReviewStep,
+} from './schema';
+
+export function startReview(pack: ReviewPack): ReviewSession {
+  const first = pack.flows[0];
+  return {
+    pack,
+    state: {
+      status: {},
+      stepStatus: {},
+      notes: {},
+      position: { flow: first.id, step: first.steps[0].id },
+      updated: 0,
+    },
+  };
+}
+export function selectStep(session: ReviewSession, position: Position): ReviewSession {
+  const flow = session.pack.flows.find((flow) => flow.id === position.flow);
+  if (!flow?.steps.some((step) => step.id === position.step))
+    throw new Error('That step is not part of this review.');
+  return { ...session, state: { ...session.state, position, updated: session.state.updated } };
+}
+export function saveNote(session: ReviewSession, step: ReviewStep, text: string): ReviewSession {
+  return {
+    ...session,
+    state: {
+      ...session.state,
+      notes: { ...session.state.notes, [step.id]: text.slice(0, MAX_NOTE_CHARACTERS) },
+      updated: session.state.updated,
+    },
+  };
+}
+export function inspectStep(
+  session: ReviewSession,
+  step: ReviewStep,
+  opened: ReadonlySet<BlockId>,
+  status: 'done' | 'flag',
+): ReviewSession {
+  const evidence = evidenceForStep(session.pack.blocks, step);
+  if (evidence.some((block) => block.missing || !opened.has(block.id)))
+    throw new Error('Open every code block before marking this step reviewed.');
+  const state: ReviewState = {
+    ...session.state,
+    status: { ...session.state.status },
+    stepStatus: { ...session.state.stepStatus, [step.id]: status },
+    updated: session.state.updated,
+  };
+  for (const id of step.blockIds)
+    state.status[id] =
+      status === 'flag'
+        ? 'flag'
+        : state.status[id] === 'flag' && session.state.stepStatus[step.id] !== 'flag'
+          ? 'flag'
+          : 'done';
+  for (const id of step.blockIds)
+    if (
+      session.pack.flows.some((flow) =>
+        flow.steps.some(
+          (candidate) =>
+            candidate.blockIds.includes(id) && state.stepStatus[candidate.id] === 'flag',
+        ),
+      )
+    )
+      state.status[id] = 'flag';
+  return { ...session, state };
+}
+export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSession {
+  const prior = session.pack.flows
+      .flatMap((flow) => flow.steps)
+      .filter(
+        (step) => session.state.notes[step.id] || session.state.stepStatus[step.id] === 'flag',
+      ),
+    notes: ReviewState['notes'] = {},
+    stepStatus: ReviewState['stepStatus'] = {};
+  for (const flow of pack.flows)
+    for (const step of flow.steps) {
+      const matches = prior.filter((previous) =>
+          previous.blockIds.some((id) => step.blockIds.includes(id)),
+        ),
+        texts = matches.flatMap((previous) => {
+          const note = session.state.notes[previous.id];
+          return note ? ['[From ' + previous.title + '] ' + note] : [];
+        });
+      if (texts.length) notes[step.id] = texts.join('\n\n').slice(0, MAX_NOTE_CHARACTERS);
+      if (matches.some((previous) => session.state.stepStatus[previous.id] === 'flag'))
+        stepStatus[step.id] = 'flag';
+    }
+  const first = pack.flows[0];
+  return {
+    pack,
+    state: {
+      ...session.state,
+      notes,
+      stepStatus,
+      position: { flow: first.id, step: first.steps[0].id },
+      updated: session.state.updated,
+    },
+  };
+}
