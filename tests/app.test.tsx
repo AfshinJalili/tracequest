@@ -1,11 +1,16 @@
+import { File as NativeFile, Blob as NativeBlob } from 'node:buffer';
+import { URL as NativeURL } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewPage } from '@/features/review/review-page';
 import demo from '../public/demo.json';
+import { decodeSession } from '@/domains/review';
+import { importReviewFile } from '@/integrations/files';
 import { loadReview } from '@/persistence/review-storage';
 import { loadPreferences } from '@/persistence/preferences-storage';
+const nativeFetch = globalThis.fetch;
 function mount() {
   return render(
     <TooltipProvider>
@@ -192,4 +197,79 @@ describe('review application', () => {
       /Trail scout|cartographer|WHOLE PICTURE|breadcrumbs|XP/,
     );
   });
+  it('downloads both actual menu outputs and restores an exported review through the file picker', async () => {
+    vi.stubGlobal('Blob', NativeBlob);
+    vi.stubGlobal('File', NativeFile);
+    vi.stubGlobal('URL', NativeURL);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify(demo), { status: 200 })),
+    );
+    const captures: { filename: string; body: Promise<string> }[] = [];
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      expect(this.parentElement).toBe(document.body);
+      const body = nativeFetch(this.href).then((response) => {
+        expect(response.ok).toBe(true);
+        return response.text();
+      });
+      captures.push({ filename: this.download, body });
+    });
+    const user = userEvent.setup();
+    const mounted = mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    for (const block of screen.getAllByRole('button', { name: /^Open code / }))
+      await user.click(block);
+    await user.click(screen.getByRole('button', { name: 'Flag' }));
+    await user.type(
+      screen.getByLabelText('Concern'),
+      'Verify the owner lock runs inside @Transaction',
+    );
+    await user.click(screen.getByRole('button', { name: 'Save flag' }));
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Export notes' }));
+    const notes = captures[0];
+    if (!notes) throw new Error('Notes download was not started');
+    expect(notes.filename).toBe('tracequest-review.md');
+    const markdown = await notes.body;
+    expect(markdown).toContain('Verify the owner lock runs inside @Transaction');
+    expect(markdown).toContain('FLAG');
+    expect(markdown).toContain('3/14 evidence blocks');
+
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Export review file' }));
+    const review = captures[1];
+    if (!review) throw new Error('Review download was not started');
+    expect(review.filename).toBe('tracequest-review.json');
+    const json = await review.body;
+    const raw = decodeSession(JSON.parse(json));
+    expect(raw.pack.blocks).toHaveLength(14);
+    expect(raw.pack.flows).toHaveLength(4);
+    expect(raw.state.notes['fresh-entry']).toContain('@Transaction');
+    expect(raw.state.stepStatus['fresh-entry']).toBe('flag');
+    const file = new File([json], review.filename, { type: 'application/json' });
+    const restored = await importReviewFile(file);
+    expect(restored.pack).toEqual(raw.pack);
+    expect(restored.state).toEqual(raw.state);
+
+    mounted.unmount();
+    localStorage.clear();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Import PR' }));
+    const importer = screen.getByRole('dialog', { name: 'Import review' });
+    await user.click(within(importer).getByRole('tab', { name: 'File' }));
+    const picker = document.getElementById('review-file');
+    if (!picker) throw new Error('File picker missing');
+    await user.upload(picker, file);
+    await waitFor(() =>
+      expect(screen.getByLabelText('Step note')).toHaveValue(
+        'Verify the owner lock runs inside @Transaction',
+      ),
+    );
+    expect(screen.getByText('Flagged', { selector: '.step-state' })).toBeInTheDocument();
+    expect(click).toHaveBeenCalledTimes(2);
+  }, 15_000);
 });

@@ -5,8 +5,8 @@ export {
   prSchema,
   fileSchema,
   stateSchema,
-  MAX_IMPORT_BYTES,
 } from './schema';
+export { fileImportLimits } from './import-limits';
 export type {
   BlockId,
   FlowId,

@@ -14,7 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { importPublicPr } from '@/integrations/github';
 import { importReviewFile } from '@/integrations/files';
-import { importDiff, startReview, type ReviewSession } from '@/domains/review';
+import { fileImportLimits, importDiff, startReview, type ReviewSession } from '@/domains/review';
 export function ImportDialog({
   open,
   onOpenChange,
@@ -92,7 +92,7 @@ export function ImportDialog({
             <label className="file-upload" htmlFor="review-file">
               <Upload />
               <span>Choose a diff or review file</span>
-              <small>.diff, .patch, .json · up to 3 MB</small>
+              <small>.diff, .patch, .json · up to {fileImportLimits.diff.label}</small>
               <Input
                 id="review-file"
                 type="file"

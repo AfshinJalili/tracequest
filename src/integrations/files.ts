@@ -2,15 +2,20 @@ import { z } from 'zod';
 import {
   decodeSession,
   importDiff,
-  MAX_IMPORT_BYTES,
+  fileImportLimits,
   startReview,
   validatePack,
   type ReviewSession,
 } from '@/domains/review';
-export async function importReviewFile(file: File): Promise<ReviewSession> {
-  if (file.size > MAX_IMPORT_BYTES) throw new Error('Use a diff or review file smaller than 3 MB.');
+export async function importReviewFile(
+  file: Pick<File, 'name' | 'size' | 'text'>,
+): Promise<ReviewSession> {
+  const isReviewFile = file.name.toLowerCase().endsWith('.json');
+  const limit = isReviewFile ? fileImportLimits.review : fileImportLimits.diff;
+  if (file.size > limit.maxBytes)
+    throw new Error(`Use a diff or review file smaller than ${limit.label}.`);
   const text = await file.text();
-  if (!file.name.toLowerCase().endsWith('.json'))
+  if (!isReviewFile)
     return startReview(importDiff(text, file.name.replace(/\.(diff|patch|txt)$/i, '')));
   const raw: unknown = JSON.parse(text);
   const session = z.object({ pack: z.unknown(), state: z.unknown() }).safeParse(raw);

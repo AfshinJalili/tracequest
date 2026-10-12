@@ -1,11 +1,11 @@
 import {
   blockIdSchema,
   MAX_BLOCK_LINES,
-  MAX_IMPORT_BYTES,
   type ChangedFile,
   type EvidenceBlock,
   type ReviewStep,
 } from './schema';
+import { fileImportLimits } from './import-limits';
 
 export function hash(text: string): string {
   let value = 2166136261;
@@ -90,8 +90,8 @@ export function parseEvidence(files: ChangedFile[]): EvidenceBlock[] {
   return blocks;
 }
 export function parseUnifiedDiff(diff: string): ChangedFile[] {
-  if (new TextEncoder().encode(diff).length > MAX_IMPORT_BYTES)
-    throw new Error('Use a diff smaller than 3 MB.');
+  if (new TextEncoder().encode(diff).length > fileImportLimits.diff.maxBytes)
+    throw new Error(`Use a diff smaller than ${fileImportLimits.diff.label}.`);
   const files: ChangedFile[] = [];
   let file: ChangedFile | undefined;
   for (const line of diff.replace(/\r\n/g, '\n').split('\n')) {
