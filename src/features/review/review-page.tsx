@@ -10,7 +10,6 @@ import {
   Settings2,
 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -28,9 +27,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { mappingPrompt, reviewReport, type Position, type StepId } from '@/domains/review';
+import { agentReviewPrompt, reviewReport, type Position, type StepId } from '@/domains/review';
 import { downloadText } from '@/integrations/files';
-import { mapWithModel, type ModelSettings } from '@/integrations/model';
+import { type ModelSettings } from '@/integrations/model';
 import { ModelSettingsDialog } from '@/features/ai/model-settings-dialog';
 import { PromptDialog, type PromptRequest } from '@/features/ai/prompt-dialog';
 import { ImportDialog } from '@/features/import/import-dialog';
@@ -38,6 +37,7 @@ import { SettingsDialog } from '@/features/settings/settings-dialog';
 import { usePreferences } from '@/features/settings/use-preferences';
 import { ReviewSidebar, type ReviewScreen } from './components/review-sidebar';
 import { FlowList } from './components/flow-list';
+import { EvidenceInbox } from './components/evidence-inbox';
 import { StepView, type StepDetailTab } from './components/step-view';
 import { CoverageView } from './components/coverage-view';
 import { NotesView } from './components/notes-view';
@@ -59,9 +59,7 @@ export function ReviewPage() {
     [flagOpen, setFlagOpen] = useState(false),
     [modelsOpen, setModelsOpen] = useState(false),
     [settings, setSettings] = useState<ModelSettings | null>(null),
-    [prompt, setPrompt] = useState<PromptRequest | null>(null),
-    [mapping, setMapping] = useState<string | null>(null);
-  const request = useRef<AbortController | null>(null);
+    [prompt, setPrompt] = useState<PromptRequest | null>(null);
   const questionInput = useRef<HTMLTextAreaElement>(null);
   const sidebarButton = useRef<HTMLButtonElement>(null);
   const restoreSidebarFocus = useRef(false);
@@ -75,9 +73,6 @@ export function ReviewPage() {
       restoreSidebarFocus.current = false;
     }
   }, [sidebarOpen]);
-  const currentPack = useRef(session?.pack.id);
-  currentPack.current = session?.pack.id;
-  useEffect(() => () => request.current?.abort(), []);
   const select = (position: Position) => {
     review.select(position);
     setScreen('review');
@@ -117,11 +112,11 @@ export function ReviewPage() {
         event.preventDefault();
         toggleSidebar();
       }
-      if (event.key.toLowerCase() === 'j' && view?.next) {
+      if (event.key.toLowerCase() === 'j' && view?.kind === 'review' && view.next) {
         event.preventDefault();
         review.select(view.next);
       }
-      if (event.key.toLowerCase() === 'k' && view?.previous) {
+      if (event.key.toLowerCase() === 'k' && view?.kind === 'review' && view.previous) {
         event.preventDefault();
         review.select(view.previous);
       }
@@ -141,33 +136,6 @@ export function ReviewPage() {
     sheet,
     toggleSidebar,
   ]);
-  async function generate() {
-    if (!session) return;
-    if (!settings) {
-      setPrompt({ kind: 'mapping', text: mappingPrompt(session.pack), pack: session.pack });
-      return;
-    }
-    const original = session.pack.id,
-      controller = new AbortController();
-    request.current = controller;
-    try {
-      const pack = await mapWithModel(
-        settings,
-        session.pack,
-        (current, total) => setMapping(`Generating ${current}/${total}`),
-        controller.signal,
-      );
-      if (currentPack.current === original) {
-        review.applyMap(pack);
-        toast.success('Flows updated.');
-      }
-    } catch (error) {
-      if (!controller.signal.aborted)
-        toast.error(error instanceof Error ? error.message : 'Flow generation failed.');
-    } finally {
-      setMapping(null);
-    }
-  }
   if (review.load.kind === 'loading')
     return (
       <div className="app-loading">
@@ -184,9 +152,9 @@ export function ReviewPage() {
       </main>
     );
   const sidebarLabel = sidebarOpen ? 'Close sidebar' : 'Open sidebar';
-  const detailTab = detail?.step === view.step.id ? detail.tab : 'code';
+  const detailTab = view.kind === 'review' && detail?.step === view.step.id ? detail.tab : 'code';
   const selectDetail = (tab: StepDetailTab) => {
-    setDetail({ step: view.step.id, tab });
+    if (view.kind === 'review') setDetail({ step: view.step.id, tab });
   };
   const sidebarToggle = (
     <Tooltip>
@@ -243,7 +211,10 @@ export function ReviewPage() {
                     selectDetail('ask');
                     questionInput.current?.focus();
                   }}
-                  aria-pressed={screen === 'review' && detailTab === 'ask'}
+                  disabled={view.kind !== 'review'}
+                  aria-pressed={
+                    view.kind === 'review' && screen === 'review' && detailTab === 'ask'
+                  }
                 >
                   <MessageSquare />
                   Ask AI
@@ -303,50 +274,75 @@ export function ReviewPage() {
               <Button variant="ghost" onClick={() => setModelsOpen(true)}>
                 Models
               </Button>
-              <Button variant="ghost" disabled={mapping !== null} onClick={() => void generate()}>
-                {mapping ?? 'Generate flows'}
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  setPrompt({
+                    kind: 'mapping',
+                    text: agentReviewPrompt(session.pack),
+                  })
+                }
+              >
+                Agent review
               </Button>
             </div>
           </section>
-          <Sheet open={sheet} onOpenChange={setSheet}>
-            <SheetTrigger asChild>
-              <Button variant="outline" className="mobile-flow-picker">
-                <GitBranch />
-                <span>{view.flow.title}</span>
-                <ChevronDown />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="bottom" className="flow-sheet">
-              <SheetHeader>
-                <SheetTitle>Flows</SheetTitle>
-                <SheetDescription>
-                  {view.steps.inspected} of {view.steps.total} steps reviewed.
-                </SheetDescription>
-              </SheetHeader>
-              <FlowList view={view} onSelect={select} />
-              <div className="mobile-secondary-nav">
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setScreen('coverage');
-                    setSheet(false);
-                  }}
-                >
-                  Coverage
+          {view.kind === 'review' ? (
+            <Sheet open={sheet} onOpenChange={setSheet}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="mobile-flow-picker">
+                  <GitBranch />
+                  <span>{view.flow.title}</span>
+                  <ChevronDown />
                 </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    setScreen('notes');
-                    setSheet(false);
-                  }}
-                >
-                  Notes
-                </Button>
-              </div>
-            </SheetContent>
-          </Sheet>
-          {screen === 'review' ? (
+              </SheetTrigger>
+              <SheetContent side="bottom" className="flow-sheet">
+                <SheetHeader>
+                  <SheetTitle>Flows</SheetTitle>
+                  <SheetDescription>
+                    {view.steps.inspected} of {view.steps.total} steps reviewed.
+                  </SheetDescription>
+                </SheetHeader>
+                <FlowList view={view} onSelect={select} />
+                <div className="mobile-secondary-nav">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setScreen('coverage');
+                      setSheet(false);
+                    }}
+                  >
+                    Coverage
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setScreen('notes');
+                      setSheet(false);
+                    }}
+                  >
+                    Notes
+                  </Button>
+                </div>
+              </SheetContent>
+            </Sheet>
+          ) : null}
+          {screen === 'review' && (view.kind === 'evidence' || review.evidenceSelection) ? (
+            <EvidenceInbox
+              view={view}
+              session={session}
+              selectedId={review.evidenceSelection}
+              onOpen={review.open}
+              onBack={review.clearEvidenceSelection}
+              onImport={() => setImportOpen(true)}
+              onPrepare={() =>
+                setPrompt({
+                  kind: 'mapping',
+                  text: agentReviewPrompt(session.pack),
+                })
+              }
+            />
+          ) : screen === 'review' ? (
             <StepView
               review={review}
               settings={settings}
@@ -399,8 +395,8 @@ export function ReviewPage() {
       <FlagDialog
         open={flagOpen}
         onOpenChange={setFlagOpen}
-        title={view.step.title}
-        note={view.note}
+        title={view.kind === 'review' ? view.step.title : ''}
+        note={view.kind === 'review' ? view.note : ''}
         onSave={(text) => {
           review.note(text);
           review.inspect('flag');

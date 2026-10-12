@@ -7,12 +7,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusIcon } from './status-icon';
-import { type Position, type ReviewView } from '@/domains/review';
+import { type Position, type AuthoredReviewView } from '@/domains/review';
 export function StepNavigator({
   view,
   onSelect,
 }: {
-  view: ReviewView;
+  view: AuthoredReviewView;
   onSelect: (position: Position) => void;
 }) {
   return (

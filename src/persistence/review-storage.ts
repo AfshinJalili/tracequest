@@ -23,12 +23,12 @@ export function loadReview(storage?: Pick<Storage, 'getItem'>): StoredReview {
     const raw = legacySchema.parse(JSON.parse(old)),
       pack = validatePack(raw.pack),
       flow = pack.flows[raw.state.position.flow] ?? pack.flows[0],
-      step = flow.steps[raw.state.position.step] ?? flow.steps[0];
+      step = flow?.steps[raw.state.position.step] ?? flow?.steps[0];
     return {
       kind: 'ready',
       session: decodeSession({
         pack,
-        state: { ...raw.state, position: { flow: flow.id, step: step.id } },
+        state: { ...raw.state, position: flow && step ? { flow: flow.id, step: step.id } : null },
       }),
     };
   } catch (error) {

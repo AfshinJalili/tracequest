@@ -21,13 +21,15 @@ Open **Review actions → Import PR**. Import a public GitHub URL, a unified `.d
 
 Select a named step and open every code block before marking it reviewed. Flags and notes stay attached to their step. Coverage counts shared evidence once. Inspection records progress; it does not approve a PR.
 
-The initial routes for arbitrary diffs use cross-file symbol matching. They are labeled draft because unchanged callers and ambiguous names can prevent a reliable call graph. AI-generated maps are also labeled inferred. Every evidence ID is checked, and omitted evidence remains in an unmapped flow.
+Raw imports open **Evidence**, with a file picker and paged code blocks. They contain no review flows or steps. Open **Agent review** to export a brief for a coding agent with access to the full repository, then import its authored review JSON. Unmapped evidence and missing project context remain visible.
+
+Follow the [agent review workflow](docs/agent-review.md). The agent must read project docs, unchanged callers, models, authorization, and tests; explain behavior; and check its pack against the pinned source before handoff. A valid JSON file alone does not establish review quality.
 
 ## Connect an AI provider
 
 Open **AI settings** and enter an OpenAI-compatible HTTPS base URL, model ID, and API key. The endpoint must allow browser CORS requests. The key stays in tab memory and is never saved or exported.
 
-Questions send only the current step's evidence and available pinned context. **Generate flows** sends changed blocks in bounded batches. Without credentials, copy the generated prompt into ChatGPT or a coding agent and paste the returned map JSON.
+Questions send only the current step's evidence and available pinned context. Without credentials, copy that context into ChatGPT or a coding agent. Authoring a review plan uses the full-repository agent workflow rather than a patch-only model request.
 
 ## Check changes
 
@@ -35,7 +37,15 @@ Questions send only the current step's evidence and available pinned context. **
 npm run check
 ```
 
-CI checks strict types, module boundaries, domain tests, React interactions, adapters, storage migration, and the production build. Run `npm run test:watch` while changing review rules.
+CI checks strict types, module boundaries, domain tests, React interactions, adapters, storage migration, a source-verifier run against a real Git fixture, and the production build. Run `npm run test:watch` while changing review rules.
+
+To check an authored pack against the repository it describes:
+
+```sh
+npm run verify:pack -- --pack review.json --repo /path/to/checkout --stamp
+```
+
+The command checks base/head commits, changed files, complete patches, cached context, references, and evidence accounting. It cannot validate the meaning of an explanation.
 
 The automated interaction tests use the actual React components and demo snapshot. External HTTP/model responses are controlled in tests. Live provider connectivity requires credentials. Visual browser QA is unavailable in the current build environment.
 

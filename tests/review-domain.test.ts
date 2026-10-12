@@ -15,10 +15,11 @@ import {
   saveNote,
   selectStep,
   startReview,
-  validateMappedFlows,
   validatePack,
 } from '@/domains/review';
 const pack = validatePack(demo);
+const firstFlow = pack.flows[0];
+if (!firstFlow) throw new Error('Demo flow missing.');
 describe('review domain', () => {
   it('preserves every line and stable evidence ID from the real Vendure PR', () => {
     const generated = parseEvidence(pack.files);
@@ -36,15 +37,15 @@ describe('review domain', () => {
   });
   it('requires all evidence to be opened before inspection', () => {
     const session = startReview(pack),
-      step = pack.flows[0].steps[0];
+      step = firstFlow.steps[0];
     expect(() => inspectStep(session, step, new Set(), 'done')).toThrow(/Open every/);
     const next = inspectStep(session, step, new Set(step.blockIds), 'done');
     expect(reviewView(next, new Set()).coverage.inspected).toBe(3);
     expect(session.state.status).toEqual({});
   });
   it('counts shared evidence once and retains another step’s flag when one is resolved', () => {
-    const first = pack.flows[0].steps.find((step) => step.id === 'fresh-owner'),
-      second = pack.flows[0].steps.find((step) => step.id === 'fresh-reread');
+    const first = firstFlow.steps.find((step) => step.id === 'fresh-owner'),
+      second = firstFlow.steps.find((step) => step.id === 'fresh-reread');
     if (!first || !second) throw new Error('Fixture steps missing.');
     let session = startReview(pack);
     const opened = new Set(first.blockIds);
@@ -56,37 +57,40 @@ describe('review domain', () => {
     session = inspectStep(session, second, opened, 'done');
     expect(reviewView(session, opened).coverage.flags).toBe(0);
   });
-  it('rejects made-up AI references and retains omitted evidence', () => {
+  it('rejects dangling references and requires explicit dispositions for omitted evidence', () => {
+    const step = firstFlow.steps[0];
+    const partial = { ...pack, flows: [{ ...firstFlow, steps: [step] }] };
+    expect(() => validatePack(partial)).toThrow(/omits evidence/);
+    const accounted = {
+      ...partial,
+      unmapped: pack.blocks
+        .filter((block) => !step.blockIds.includes(block.id))
+        .map((block) => ({ blockId: block.id, reason: 'Requires a separate behavior review' })),
+    };
+    expect(validatePack(accounted).flows).toHaveLength(1);
     expect(() =>
-      validateMappedFlows(
-        { flows: [{ title: 'Bad', steps: [{ blockIds: ['invented'] }] }] },
-        pack.blocks,
-      ),
+      validatePack({
+        ...accounted,
+        flows: [{ ...firstFlow, steps: [{ ...step, blockIds: ['invented'] }] }],
+      }),
     ).toThrow(/missing evidence/);
-    const flows = validateMappedFlows(
-      { flows: [{ title: 'Partial', steps: [{ blockIds: [pack.blocks[0].id] }] }] },
-      pack.blocks,
-    );
-    expect(flows).toHaveLength(2);
-    expect(flows[1]?.title).toBe('Unmapped evidence');
-    expect(flows[1]?.steps).toHaveLength(13);
   });
   it('carries notes and flags to a remapped flow without marking new steps reviewed', () => {
-    const step = pack.flows[0].steps[0],
+    const step = firstFlow.steps[0],
       opened = new Set(step.blockIds);
     let session = inspectStep(startReview(pack), step, opened, 'flag');
     session = saveNote(session, step, 'Check transaction context');
-    const mapped = {
+    const mapped = validatePack({
       ...pack,
-      mapping: 'ai',
-      flows: validateMappedFlows(
-        { flows: [{ title: 'Mapped', steps: [{ blockIds: step.blockIds }] }] },
-        pack.blocks,
-      ),
-    } satisfies typeof pack;
+      flows: [{ ...firstFlow, steps: [{ ...step, id: 'remapped-step' }] }],
+      unmapped: pack.blocks
+        .filter((block) => !step.blockIds.includes(block.id))
+        .map((block) => ({ blockId: block.id, reason: 'Not in this flow' })),
+    });
     const next = remapReview(session, mapped),
       view = reviewView(next, opened);
     expect(view.notes[0]?.text).toContain('Check transaction context');
+    if (view.kind !== 'review') throw new Error('Authored view missing.');
     expect(view.step.status).toBe('flag');
     expect(view.coverage.inspected).toBe(3);
   });
@@ -96,9 +100,7 @@ describe('review domain', () => {
       ]),
       session = startReview(missing);
     expect(reviewView(session, new Set()).coverage.missing).toBe(1);
-    expect(() =>
-      inspectStep(session, missing.flows[0].steps[0], new Set([missing.blocks[0].id]), 'done'),
-    ).toThrow();
+    expect(reviewView(session, new Set()).kind).toBe('evidence');
   });
   it('imports deletions without losing removed lines', () => {
     const files = parseUnifiedDiff(
@@ -108,7 +110,7 @@ describe('review domain', () => {
     expect(parseEvidence(files)[0]?.code).toContain('-two');
     expect(() => importDiff('invalid')).toThrow(/No unified diff/);
   });
-  it('finds cross-file candidate links without calling them verified', () => {
+  it('ingests linked symbols as evidence without inventing review flows', () => {
     const candidate = buildPack({ title: 'Order' }, [
       {
         filename: 'order.controller.ts',
@@ -123,8 +125,8 @@ describe('review domain', () => {
         deletions: 0,
       },
     ]);
-    expect(candidate.flows[0].steps).toHaveLength(2);
-    expect(candidate.mapping).toBe('candidate');
+    expect(candidate.flows).toHaveLength(0);
+    expect(candidate.mapping).toBe('evidence');
   });
   it('prunes stale stored IDs and rejects an invalid selection command', () => {
     const session = startReview(pack);
@@ -136,14 +138,14 @@ describe('review domain', () => {
     expect(restored.state.notes).toEqual({});
     expect(() =>
       selectStep(session, {
-        flow: pack.flows[0].id,
-        step: pack.flows[1]?.steps[0].id ?? pack.flows[0].steps[0].id,
+        flow: firstFlow.id,
+        step: pack.flows[1]?.steps[0].id ?? firstFlow.steps[0].id,
       }),
     ).toThrow(/not part/);
   });
   it('exports a review record, never an approval', () => {
     let session = startReview(pack);
-    const step = pack.flows[0].steps[0];
+    const step = firstFlow.steps[0];
     session = inspectStep(session, step, new Set(step.blockIds), 'flag');
     session = saveNote(session, step, 'Check the lock');
     const text = reviewReport(session);
@@ -153,7 +155,7 @@ describe('review domain', () => {
     expect(text).toContain('FLAG');
   });
   it('does not accept a forged block ID as opened evidence', () => {
-    const step = pack.flows[0].steps[0];
+    const step = firstFlow.steps[0];
     expect(() =>
       inspectStep(startReview(pack), step, new Set([blockIdSchema.parse('forged')]), 'done'),
     ).toThrow();

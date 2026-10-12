@@ -13,7 +13,7 @@ export function CoverageView({
       <h2>Coverage</h2>
       <p>
         {view.coverage.inspected} of {view.coverage.total} blocks reviewed. {view.coverage.flags}{' '}
-        flagged.
+        flagged. {view.coverage.unmapped} unmapped. {view.coverage.missing} patches unavailable.
       </p>
       <div className="coverage-list">
         {view.blocks.map((block) => (
@@ -37,7 +37,9 @@ export function CoverageView({
                   ? 'Reviewed'
                   : block.status === 'flag'
                     ? 'Flagged'
-                    : 'Pending'}
+                    : !block.mapped
+                      ? 'Unmapped'
+                      : 'Pending'}
             </small>
           </Button>
         ))}

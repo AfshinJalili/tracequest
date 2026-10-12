@@ -10,9 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { copyText, downloadText } from '@/integrations/files';
-import { type ReviewPack, validateMappedFlows } from '@/domains/review';
-export type PromptRequest =
-  { kind: 'question'; text: string } | { kind: 'mapping'; text: string; pack: ReviewPack };
+import { type ReviewPack, validatePack } from '@/domains/review';
+export type PromptRequest = { kind: 'question'; text: string } | { kind: 'mapping'; text: string };
 export function PromptDialog({
   request,
   onClose,
@@ -35,10 +34,10 @@ export function PromptDialog({
     >
       <DialogContent className="prompt-dialog">
         <DialogHeader>
-          <DialogTitle>Copy context</DialogTitle>
+          <DialogTitle>{request?.kind === 'mapping' ? 'Agent review' : 'Copy context'}</DialogTitle>
           <DialogDescription>
             {request?.kind === 'mapping'
-              ? 'Send this prompt to ChatGPT or your coding agent, then paste the JSON map below.'
+              ? 'Give the brief and evidence to an agent with access to the full repository.'
               : 'Send this step and its code to ChatGPT or your coding agent.'}
           </DialogDescription>
         </DialogHeader>
@@ -69,33 +68,33 @@ export function PromptDialog({
               try {
                 const data = new FormData(event.currentTarget),
                   raw = data.get('map');
-                if (typeof raw !== 'string') throw new Error('Paste the map JSON.');
+                if (typeof raw !== 'string') throw new Error('Paste the authored review JSON.');
                 const value: unknown = JSON.parse(
                   raw
                     .trim()
                     .replace(/^```(?:json)?\s*/, '')
                     .replace(/\s*```$/, ''),
                 );
-                onApply({
-                  ...request.pack,
-                  flows: validateMappedFlows(value, request.pack.blocks),
-                  mapping: 'ai',
-                });
+                const pack = validatePack(value);
+                if (pack.mapping !== 'authored')
+                  throw new Error('Import an agent-authored review pack.');
+                onApply(pack);
+                setError('');
                 onClose();
-                toast.success('Flows updated.');
+                toast.success('Authored review imported.');
               } catch (error) {
-                setError(error instanceof Error ? error.message : 'Invalid map.');
+                setError(error instanceof Error ? error.message : 'Invalid review pack.');
               }
             }}
           >
-            <label htmlFor="map-json">Flow map JSON</label>
+            <label htmlFor="map-json">Authored review JSON</label>
             <Textarea id="map-json" name="map" rows={5} required />
             {error ? (
               <p className="form-error" role="alert">
                 {error}
               </p>
             ) : null}
-            <Button type="submit">Apply map</Button>
+            <Button type="submit">Import review</Button>
           </form>
         ) : null}
       </DialogContent>

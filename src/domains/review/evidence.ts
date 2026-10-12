@@ -98,6 +98,7 @@ export function parseUnifiedDiff(diff: string): ChangedFile[] {
     const match = line.match(/^diff --git a\/(.+) b\/(.+)$/);
     if (match?.[2]) {
       file = { filename: match[2], patch: '', additions: 0, deletions: 0 };
+      if (match[1] && match[1] !== match[2]) file.previous_filename = match[1];
       files.push(file);
     } else if (file && (file.patch || line.startsWith('@@'))) {
       file.patch = (file.patch ? file.patch + '\n' : '') + line;

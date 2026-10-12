@@ -7,7 +7,6 @@ import {
   type ReviewSession,
 } from './schema';
 import { hash, parseEvidence, parseUnifiedDiff } from './evidence';
-import { candidateFlows } from './mapping';
 import { validatePack } from './validation';
 
 export function buildPack(pr: PullRequest, files: ChangedFile[]): ReviewPack {
@@ -18,8 +17,8 @@ export function buildPack(pr: PullRequest, files: ChangedFile[]): ReviewPack {
     pr,
     files,
     blocks,
-    flows: candidateFlows(blocks),
-    mapping: 'candidate',
+    flows: [],
+    mapping: 'evidence',
   });
 }
 export function importDiff(text: string, title = 'Local backend change'): ReviewPack {
@@ -39,8 +38,8 @@ export function decodeSession(input: unknown): ReviewSession {
   const validBlocks = new Set<string>(pack.blocks.map((block) => block.id)),
     validSteps = new Set<string>(pack.flows.flatMap((flow) => flow.steps.map((step) => step.id)));
   const first = pack.flows[0],
-    positionFlow = pack.flows.find((flow) => flow.id === session.state.position.flow),
-    positionStep = positionFlow?.steps.find((step) => step.id === session.state.position.step);
+    positionFlow = pack.flows.find((flow) => flow.id === session.state.position?.flow),
+    positionStep = positionFlow?.steps.find((step) => step.id === session.state.position?.step);
   const state = stateSchema.parse({
     ...session.state,
     status: Object.fromEntries(
@@ -55,7 +54,9 @@ export function decodeSession(input: unknown): ReviewSession {
     position:
       positionFlow && positionStep
         ? { flow: positionFlow.id, step: positionStep.id }
-        : { flow: first.id, step: first.steps[0].id },
+        : first
+          ? { flow: first.id, step: first.steps[0].id }
+          : null,
   });
   return { pack, state };
 }

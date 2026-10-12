@@ -46,7 +46,7 @@ it('imports a public PR through all file pages and validates completeness', asyn
   const pack = await importPublicPr('https://github.com/vendurehq/vendure/pull/5259');
   expect(pack.blocks).toHaveLength(14);
   expect(fetch).toHaveBeenCalledTimes(2);
-  expect(pack.mapping).toBe('candidate');
+  expect(pack.mapping).toBe('evidence');
 });
 it('reports a GitHub rate limit instead of returning an empty review', async () => {
   vi.stubGlobal(
@@ -66,13 +66,15 @@ it('sends only the selected step’s evidence with the model request', async () 
       ),
   );
   vi.stubGlobal('fetch', fetch);
-  const session = startReview(validatePack(demo)),
-    answer = await askModel(
-      { endpoint: 'https://api.example.invalid/v1', model: 'review-model', key: 'temporary-key' },
-      session,
-      session.pack.flows[0].steps[0],
-      'Which transaction?',
-    );
+  const session = startReview(validatePack(demo));
+  const firstStep = session.pack.flows[0]?.steps[0];
+  if (!firstStep) throw new Error('Demo step missing.');
+  const answer = await askModel(
+    { endpoint: 'https://api.example.invalid/v1', model: 'review-model', key: 'temporary-key' },
+    session,
+    firstStep,
+    'Which transaction?',
+  );
   expect(answer).toBe('Check the transaction boundary.');
   const call = fetch.mock.calls[0];
   expect(call).toBeDefined();

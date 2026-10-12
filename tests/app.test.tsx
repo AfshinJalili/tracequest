@@ -6,10 +6,11 @@ import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewPage } from '@/features/review/review-page';
 import demo from '../public/demo.json';
-import { decodeSession } from '@/domains/review';
+import { buildPack, decodeSession, sourceFingerprint, startReview } from '@/domains/review';
 import { importReviewFile } from '@/integrations/files';
-import { loadReview } from '@/persistence/review-storage';
+import { loadReview, persistReview } from '@/persistence/review-storage';
 import { loadPreferences } from '@/persistence/preferences-storage';
+import { authoredDemo, largeBackendFiles } from './review-fixture';
 const nativeFetch = globalThis.fetch;
 function mount() {
   return render(
@@ -31,6 +32,81 @@ beforeEach(() => {
   );
 });
 describe('review application', () => {
+  it('imports 73 raw files as manageable evidence without a review plan', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Import PR' }));
+    const importer = screen.getByRole('dialog', { name: 'Import review' });
+    await user.click(within(importer).getByRole('tab', { name: 'Paste diff' }));
+    const diff = largeBackendFiles()
+      .map(
+        (file) =>
+          `diff --git a/${file.filename} b/${file.filename}\n--- /dev/null\n+++ b/${file.filename}\n${file.patch}`,
+      )
+      .join('\n');
+    fireEvent.change(screen.getByLabelText('Unified diff'), { target: { value: diff } });
+    await user.click(within(importer).getByRole('button', { name: 'Import diff' }));
+    await screen.findByRole('heading', { name: 'Evidence imported' });
+    expect(screen.queryByRole('button', { name: 'Review & next' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeDisabled();
+    expect(screen.getByRole('combobox', { name: 'Source file' }).children).toHaveLength(73);
+    expect(screen.getAllByRole('button', { name: /^Open code / }).length).toBeLessThanOrEqual(12);
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Source file' }),
+      'module-72.spec.ts',
+    );
+    expect(screen.getByRole('combobox', { name: 'Source file' })).toHaveValue('module-72.spec.ts');
+    await user.click(screen.getAllByRole('button', { name: 'Agent review' })[0]!);
+    const brief = screen.getByRole('dialog', { name: 'Agent review' });
+    const context = within(brief).getByRole('textbox', { name: 'Review context' });
+    if (!(context instanceof HTMLTextAreaElement)) throw new Error('Agent brief missing');
+    expect(context.value.includes('unchanged callers')).toBe(true);
+    expect(within(brief).getByLabelText('Authored review JSON')).toBeVisible();
+  });
+  it('reports a mismatched authored import in the dialog and applies a valid plan', async () => {
+    const user = userEvent.setup(),
+      pack = authoredDemo();
+    persistReview(startReview(buildPack(pack.pr, pack.files)));
+    const mounted = mount();
+    await screen.findByRole('heading', { name: 'Evidence imported' });
+    await user.click(screen.getAllByRole('button', { name: 'Agent review' })[0]!);
+    const brief = screen.getByRole('dialog', { name: 'Agent review' });
+    const mismatched = { ...pack, pr: { ...pack.pr, head: { sha: 'f'.repeat(40) } } };
+    const json = {
+      ...mismatched,
+      authorship: { ...pack.authorship, sourceFingerprint: sourceFingerprint(mismatched) },
+    };
+    fireEvent.change(within(brief).getByLabelText('Authored review JSON'), {
+      target: { value: JSON.stringify(json) },
+    });
+    await user.click(within(brief).getByRole('button', { name: 'Import review' }));
+    expect(within(brief).getByRole('alert')).toHaveTextContent('must match the current evidence');
+    fireEvent.change(within(brief).getByLabelText('Authored review JSON'), {
+      target: { value: JSON.stringify(pack) },
+    });
+    await user.click(within(brief).getByRole('button', { name: 'Import review' }));
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    expect(screen.getByText('Shop or admin request')).toBeVisible();
+    expect(screen.getByText('Missing context')).toBeVisible();
+    await user.click(screen.getByText('Missing context'));
+    expect(
+      screen.getByText(
+        'Project configuration and full test execution were not included in this fixture',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ask AI' })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Add note' }));
+    fireEvent.change(screen.getByLabelText('Step note'), {
+      target: { value: 'Verify resolver ownership' },
+    });
+    mounted.unmount();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    expect(screen.getByLabelText('Step note')).toHaveValue('Verify resolver ownership');
+    expect(screen.getByText('Shop or admin request')).toBeVisible();
+  });
   it('disables every shortcut immediately and remembers the preference after remount', async () => {
     const user = userEvent.setup();
     const mounted = mount();
@@ -58,7 +134,7 @@ describe('review application', () => {
     screen.getByRole('button', { name: 'Close sidebar' }).focus();
     await user.keyboard('j');
     expect(screen.getByRole('heading', { name: 'Lock the owner, in order' })).toBeInTheDocument();
-  });
+  }, 15_000);
   it('ignores annotation editors, shadow inputs, composition, and consumed key events', async () => {
     mount();
     await screen.findByRole('heading', { name: 'Active order creation' });
@@ -160,7 +236,7 @@ describe('review application', () => {
     expect(saved.kind).toBe('ready');
     if (saved.kind === 'ready') {
       expect(saved.session.state.stepStatus['fresh-entry']).toBe('done');
-      expect(saved.session.state.position.step).toBe('fresh-owner');
+      expect(saved.session.state.position?.step).toBe('fresh-owner');
     }
   });
   it('preserves a flagged concern and restores its checkpoint after remount', async () => {

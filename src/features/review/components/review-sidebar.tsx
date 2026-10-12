@@ -38,7 +38,7 @@ export function ReviewSidebar({
           variant={screen === 'review' ? 'secondary' : 'ghost'}
           onClick={() => onScreen('review')}
         >
-          Review
+          {view.primaryLabel}
         </Button>
         <Button
           variant={screen === 'coverage' ? 'secondary' : 'ghost'}
@@ -53,16 +53,22 @@ export function ReviewSidebar({
           Notes
         </Button>
       </nav>
-      <span className="flows-label">Flows</span>
+      <span className="flows-label">
+        {view.kind === 'review' ? 'Flows' : 'Agent review needed'}
+      </span>
       <FlowList view={view} onSelect={onSelect} />
       <div className="sidebar-bottom">
-        <div className="sidebar-progress">
-          <span>
-            {view.steps.inspected} / {view.steps.total} steps
-          </span>
-          <span>{view.steps.percent}%</span>
-        </div>
-        <Progress value={view.steps.percent} aria-label="Review step progress" />
+        {view.kind === 'review' ? (
+          <>
+            <div className="sidebar-progress">
+              <span>
+                {view.steps.inspected} / {view.steps.total} steps
+              </span>
+              <span>{view.steps.percent}%</span>
+            </div>
+            <Progress value={view.steps.percent} aria-label="Review step progress" />
+          </>
+        ) : null}
         <div className="local-review-label">
           <HardDrive />
           Local review

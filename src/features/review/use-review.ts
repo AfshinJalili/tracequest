@@ -29,8 +29,12 @@ export function useReview() {
         ? { kind: 'error', message: stored.message }
         : { kind: 'loading' };
   });
+  const [evidenceSelection, setEvidenceSelection] = useState<BlockId | null>(null);
   const [opened, setOpened] = useState<Set<BlockId>>(new Set());
-  const loadDemo = useCallback(() => setLoad({ kind: 'loading' }), []);
+  const loadDemo = useCallback(() => {
+    setEvidenceSelection(null);
+    setLoad({ kind: 'loading' });
+  }, []);
   useEffect(() => {
     if (load.kind !== 'loading') return;
     const controller = new AbortController();
@@ -73,6 +77,7 @@ export function useReview() {
   const select = useCallback(
     (position: Position) => {
       setOpened(new Set());
+      setEvidenceSelection(null);
       update((session) => selectStep(session, position));
     },
     [update],
@@ -83,6 +88,7 @@ export function useReview() {
   );
   const replace = useCallback((session: ReviewSession) => {
     setOpened(new Set());
+    setEvidenceSelection(null);
     setLoad({ kind: 'ready', session });
   }, []);
   const view = useMemo(
@@ -91,7 +97,7 @@ export function useReview() {
   );
   const inspect = useCallback(
     (status: 'done' | 'flag') => {
-      if (load.kind !== 'ready' || !view) return;
+      if (load.kind !== 'ready' || !view || view.kind !== 'review') return;
       update((session) => inspectStep(session, view.step, opened, status));
       if (status === 'done' && view.next) select(view.next);
       toast.success(status === 'flag' ? 'Flag saved.' : 'Step reviewed.');
@@ -100,21 +106,22 @@ export function useReview() {
   );
   const note = useCallback(
     (text: string) => {
-      if (view) update((session) => saveNote(session, view.step, text));
+      if (view?.kind === 'review') update((session) => saveNote(session, view.step, text));
     },
     [view, update],
   );
   const applyMap = useCallback(
     (pack: ReviewPack) => {
-      setOpened(new Set());
-      update((session) => remapReview(session, pack));
+      // Validate while the import dialog can still report the error to the user.
+      if (load.kind === 'ready') replace(remapReview(load.session, pack));
     },
-    [update],
+    [load, replace],
   );
   const jump = useCallback(
     (id: BlockId) => {
       if (load.kind !== 'ready') return;
       const position = positionForBlock(load.session, id);
+      setEvidenceSelection(id);
       if (position) {
         select(position);
         open(id);
@@ -127,6 +134,8 @@ export function useReview() {
     view,
     session: load.kind === 'ready' ? load.session : null,
     opened,
+    evidenceSelection,
+    clearEvidenceSelection: () => setEvidenceSelection(null),
     select,
     open,
     inspect,

@@ -10,6 +10,7 @@ import { type PromptRequest } from '@/features/ai/prompt-dialog';
 import { AiComposer } from '@/features/ai/ai-composer';
 import { StepNavigator } from './step-navigator';
 import { ContextCode, EvidenceCode } from './code-block';
+import { MissingContext } from './missing-context';
 export type StepDetailTab = 'summary' | 'code' | 'ask';
 export function StepView({
   review,
@@ -32,7 +33,7 @@ export function StepView({
 }) {
   const { view, session } = review;
   const [noteOpen, setNoteOpen] = useState(false);
-  if (!view || !session) return null;
+  if (!view || !session || view.kind !== 'review') return null;
   return (
     <section className="step-view">
       <div className="flow-heading">
@@ -41,6 +42,23 @@ export function StepView({
           {view.flow.inspected} / {view.flow.stepCount} reviewed
         </span>
       </div>
+      {view.flow.actor ? (
+        <dl className="flow-context">
+          <div>
+            <dt>Actor</dt>
+            <dd>{view.flow.actor}</dd>
+          </div>
+          <div>
+            <dt>Trigger</dt>
+            <dd>{view.flow.trigger}</dd>
+          </div>
+          <div>
+            <dt>Authorization</dt>
+            <dd>{view.flow.authorization}</dd>
+          </div>
+        </dl>
+      ) : null}
+      <MissingContext gaps={view.contextMissing} />
       <StepNavigator view={view} onSelect={review.select} />
       <div className="step-heading">
         <div>

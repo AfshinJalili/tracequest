@@ -1,4 +1,5 @@
 import { evidenceForStep } from './evidence';
+import { hasReviewPlan } from './validation';
 import { MAX_NOTE_CHARACTERS } from './schema';
 import {
   type BlockId,
@@ -10,14 +11,14 @@ import {
 } from './schema';
 
 export function startReview(pack: ReviewPack): ReviewSession {
-  const first = pack.flows[0];
+  const first = hasReviewPlan(pack) ? pack.flows[0] : undefined;
   return {
     pack,
     state: {
       status: {},
       stepStatus: {},
       notes: {},
-      position: { flow: first.id, step: first.steps[0].id },
+      position: first ? { flow: first.id, step: first.steps[0].id } : null,
       updated: 0,
     },
   };
@@ -44,6 +45,8 @@ export function inspectStep(
   opened: ReadonlySet<BlockId>,
   status: 'done' | 'flag',
 ): ReviewSession {
+  if (!hasReviewPlan(session.pack))
+    throw new Error('Import an authored review before inspecting steps.');
   const evidence = evidenceForStep(session.pack.blocks, step);
   if (evidence.some((block) => block.missing || !opened.has(block.id)))
     throw new Error('Open every code block before marking this step reviewed.');
@@ -73,6 +76,12 @@ export function inspectStep(
   return { ...session, state };
 }
 export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSession {
+  if (
+    !hasReviewPlan(pack) ||
+    JSON.stringify(session.pack.files) !== JSON.stringify(pack.files) ||
+    (session.pack.pr.head && session.pack.pr.head.sha !== pack.pr.head?.sha)
+  )
+    throw new Error('The authored review must match the current evidence and pinned commit.');
   const prior = session.pack.flows
       .flatMap((flow) => flow.steps)
       .filter(
@@ -93,14 +102,14 @@ export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSes
       if (matches.some((previous) => session.state.stepStatus[previous.id] === 'flag'))
         stepStatus[step.id] = 'flag';
     }
-  const first = pack.flows[0];
+  const first = hasReviewPlan(pack) ? pack.flows[0] : undefined;
   return {
     pack,
     state: {
       ...session.state,
       notes,
       stepStatus,
-      position: { flow: first.id, step: first.steps[0].id },
+      position: first ? { flow: first.id, step: first.steps[0].id } : null,
       updated: session.state.updated,
     },
   };

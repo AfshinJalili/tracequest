@@ -22,3 +22,5 @@ How to work:
 Refactor first, then change: a behaviour-preserving refactor with tests green, then the change. Keep them out of one unverifiable diff.
 
 Gates, not promises. A prompted "never" alone does not hold; a rule that matters is enforced by CI or a hook.
+
+For PR review content, follow [docs/agent-review.md](docs/agent-review.md). Raw evidence is not a review plan. Do not claim a PR is ready for review from importer, persistence, or UI tests; report source verification, semantic review, missing context, and app inspection separately.

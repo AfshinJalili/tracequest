@@ -3,13 +3,14 @@ import { z } from 'zod';
 export const MAX_NOTE_CHARACTERS = 20_000;
 export const MAX_IMPORT_BYTES = 3_000_000;
 export const MAX_BLOCK_LINES = 56;
-export const MAX_AI_BATCH_CHARACTERS = 45_000;
+export const MAX_AUTHORED_STEPS = 120;
 export const blockIdSchema = z.string().min(1).brand<'BlockId'>();
 export const stepIdSchema = z.string().min(1).brand<'StepId'>();
 export const flowIdSchema = z.string().min(1).brand<'FlowId'>();
 export const evidenceKindSchema = z.enum(['Entry', 'Logic', 'Boundary', 'Data', 'Proof']);
 export const fileSchema = z.object({
   filename: z.string().min(1),
+  previous_filename: z.string().min(1).optional(),
   patch: z.string().optional(),
   additions: z.number().int().nonnegative().default(0),
   deletions: z.number().int().nonnegative().default(0),
@@ -47,8 +48,12 @@ export const flowSchema = z.object({
   title: z.string().min(1),
   subtitle: z.string().default(''),
   summary: z.string().default(''),
+  actor: z.string().default(''),
+  trigger: z.string().default(''),
+  authorization: z.string().default(''),
   steps: z.tuple([stepSchema]).rest(stepSchema),
 });
+const commitSchema = z.object({ sha: z.string().regex(/^[a-f0-9]{40}$/) });
 export const prSchema = z.object({
   title: z.string().min(1),
   number: z.number().int().positive().optional(),
@@ -63,7 +68,8 @@ export const prSchema = z.object({
   additions: z.number().int().nonnegative().optional(),
   deletions: z.number().int().nonnegative().optional(),
   changed_files: z.number().int().nonnegative().optional(),
-  head: z.object({ sha: z.string().regex(/^[a-f0-9]{40}$/) }).optional(),
+  head: commitSchema.optional(),
+  base: commitSchema.optional(),
 });
 export const packSchema = z.object({
   version: z.literal(1),
@@ -71,8 +77,20 @@ export const packSchema = z.object({
   pr: prSchema,
   files: z.array(fileSchema).max(3000),
   blocks: z.tuple([blockSchema]).rest(blockSchema),
-  flows: z.tuple([flowSchema]).rest(flowSchema),
-  mapping: z.enum(['curated', 'candidate', 'ai']),
+  flows: z.array(flowSchema),
+  mapping: z.enum(['evidence', 'authored', 'curated', 'candidate', 'ai']),
+  unmapped: z
+    .array(z.object({ blockId: blockIdSchema, reason: z.string().trim().min(1) }))
+    .default([]),
+  authorship: z
+    .object({
+      author: z.string().trim().min(1),
+      sourceFingerprint: z.string().min(1),
+      contextReviewed: z.array(z.string().min(1)).min(1),
+      missingContext: z.array(z.string().min(1)),
+      verificationNotes: z.string().trim().min(1),
+    })
+    .optional(),
   sources: z.record(z.string(), z.string()).default({}),
   entities: z.array(z.string()).default([]),
 });
@@ -81,7 +99,7 @@ export const stateSchema = z.object({
   status: z.record(z.string(), z.enum(['done', 'flag'])).default({}),
   stepStatus: z.record(z.string(), z.enum(['done', 'flag'])).default({}),
   notes: z.record(z.string(), z.string().max(MAX_NOTE_CHARACTERS)).default({}),
-  position: positionSchema,
+  position: positionSchema.nullable(),
   updated: z.number().default(0),
 });
 export const sessionSchema = z.object({ pack: packSchema, state: stateSchema });

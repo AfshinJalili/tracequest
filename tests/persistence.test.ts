@@ -27,7 +27,7 @@ it('migrates the old numeric checkpoint without losing notes', () => {
   const restored = loadReview();
   expect(restored.kind).toBe('ready');
   if (restored.kind === 'ready') {
-    expect(restored.session.state.position.step).toBe('fresh-owner');
+    expect(restored.session.state.position?.step).toBe('fresh-owner');
     expect(restored.session.state.notes['fresh-owner']).toBe('Keep this note');
   }
 });
