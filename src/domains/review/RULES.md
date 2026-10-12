@@ -3,6 +3,7 @@
 This module owns evidence identity, flow integrity, review transitions, coverage, note transfer, and the values visible to presentation.
 
 - Import preserves every patch line. Block IDs stay stable for identical source.
+- Raw diff input is limited to 3 MB. Saved review JSON accepts up to 30 MB because it also contains structured evidence, source context, notes, and checkpoints. Import controls and guards read the same limit metadata.
 - A flow has at least one step. A step references at least one existing block.
 - Unknown evidence IDs invalidate an imported or AI-generated map.
 - Omitted evidence becomes an unmapped flow.

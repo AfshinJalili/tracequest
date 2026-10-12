@@ -13,7 +13,7 @@ export async function importReviewFile(
   const isReviewFile = file.name.toLowerCase().endsWith('.json');
   const limit = isReviewFile ? fileImportLimits.review : fileImportLimits.diff;
   if (file.size > limit.maxBytes)
-    throw new Error(`Use a diff or review file smaller than ${limit.label}.`);
+    throw new Error(`Use a ${isReviewFile ? 'review file' : 'diff'} up to ${limit.label}.`);
   const text = await file.text();
   if (!isReviewFile)
     return startReview(importDiff(text, file.name.replace(/\.(diff|patch|txt)$/i, '')));

@@ -6,5 +6,6 @@ function describeLimit(maxBytes: number) {
 
 export const fileImportLimits = {
   diff: describeLimit(MAX_IMPORT_BYTES),
-  review: describeLimit(MAX_IMPORT_BYTES),
+  // A saved review includes patches, evidence, source context, and checkpoints.
+  review: describeLimit(30_000_000),
 };

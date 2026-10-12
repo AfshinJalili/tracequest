@@ -92,7 +92,10 @@ export function ImportDialog({
             <label className="file-upload" htmlFor="review-file">
               <Upload />
               <span>Choose a diff or review file</span>
-              <small>.diff, .patch, .json · up to {fileImportLimits.diff.label}</small>
+              <small>
+                .diff, .patch up to {fileImportLimits.diff.label} · .json up to{' '}
+                {fileImportLimits.review.label}
+              </small>
               <Input
                 id="review-file"
                 type="file"

@@ -1,8 +1,35 @@
 import { expect, it, vi } from 'vitest';
+import { File as NativeFile } from 'node:buffer';
 import demo from '../public/demo.json';
 import { importPublicPr } from '@/integrations/github';
 import { askModel } from '@/integrations/model';
-import { startReview, validatePack } from '@/domains/review';
+import { importReviewFile } from '@/integrations/files';
+import { fileImportLimits, startReview, validatePack } from '@/domains/review';
+it('restores a large exported review even when the backup exceeds the raw diff limit', async () => {
+  const diff =
+    'diff --git a/module.ts b/module.ts\n--- a/module.ts\n+++ b/module.ts\n@@ -0,0 +1,100000 @@\n' +
+    '+values.push(42);\n'.repeat(100_000);
+  const input = new NativeFile([diff], 'large.diff');
+  expect(input.size).toBeLessThan(fileImportLimits.diff.maxBytes);
+  const session = await importReviewFile(input);
+  const backup = new NativeFile([JSON.stringify(session, null, 2)], 'tracequest-review.json', {
+    type: 'application/json',
+  });
+  expect(backup.size).toBeGreaterThan(fileImportLimits.diff.maxBytes);
+  expect(backup.size).toBeLessThan(fileImportLimits.review.maxBytes);
+  expect(await importReviewFile(backup)).toEqual(session);
+});
+it('rejects an oversized review before reading its contents', async () => {
+  const text = vi.fn(async () => '{}');
+  await expect(
+    importReviewFile({
+      name: 'large.json',
+      size: fileImportLimits.review.maxBytes + 1,
+      text,
+    }),
+  ).rejects.toThrow(fileImportLimits.review.label);
+  expect(text).not.toHaveBeenCalled();
+});
 it('imports a public PR through all file pages and validates completeness', async () => {
   const fetch = vi.fn(
     async (url: RequestInfo | URL) =>
