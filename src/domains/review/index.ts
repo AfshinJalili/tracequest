@@ -24,7 +24,8 @@ export type {
 export { parseUnifiedDiff, parseEvidence, codeRows, hash } from './evidence';
 export type { CodeRow } from './evidence';
 export { candidateFlows, validateMappedFlows } from './mapping';
-export { validatePack, buildPack, importDiff, decodeSession } from './pack';
+export { validatePack } from './validation';
+export { buildPack, importDiff, decodeSession } from './pack';
 export { startReview, selectStep, saveNote, inspectStep, remapReview } from './session';
 export { reviewView, positionForBlock, sourceUrl } from './view';
 export type { ReviewView } from './view';
