@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requestSignal } from './request-signal';
 import { REVIEW_SYSTEM, stepContext, type ReviewSession, type ReviewStep } from '@/domains/review';
 
 export const modelSettingsSchema = z.object({
@@ -25,7 +26,7 @@ async function complete(
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + settings.key },
       body: JSON.stringify({ model: settings.model, messages }),
-      signal: signal ?? AbortSignal.timeout(90000),
+      signal: requestSignal(signal, 90000),
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;

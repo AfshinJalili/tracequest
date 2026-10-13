@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { FlowList } from './flow-list';
 import { type Position, type ReviewView } from '@/domains/review';
-export type ReviewScreen = 'review' | 'coverage' | 'notes';
+import { ReviewNavigation, type ReviewScreen } from './review-navigation';
 export function ReviewSidebar({
   view,
   screen,
@@ -33,26 +33,7 @@ export function ReviewSidebar({
         <span>{view.repo}</span>
         <small>{view.sourceLabel}</small>
       </div>
-      <nav className="review-navigation" aria-label="Review views">
-        <Button
-          variant={screen === 'review' ? 'secondary' : 'ghost'}
-          onClick={() => onScreen('review')}
-        >
-          {view.primaryLabel}
-        </Button>
-        <Button
-          variant={screen === 'coverage' ? 'secondary' : 'ghost'}
-          onClick={() => onScreen('coverage')}
-        >
-          Coverage
-        </Button>
-        <Button
-          variant={screen === 'notes' ? 'secondary' : 'ghost'}
-          onClick={() => onScreen('notes')}
-        >
-          Notes
-        </Button>
-      </nav>
+      <ReviewNavigation primaryLabel={view.primaryLabel} screen={screen} onScreen={onScreen} />
       <span className="flows-label">
         {view.kind === 'review' ? 'Flows' : 'Agent review needed'}
       </span>

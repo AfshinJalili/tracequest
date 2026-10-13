@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requestSignal } from './request-signal';
 import {
   buildPack,
   fileSchema,
@@ -18,7 +19,7 @@ function publicPullRequest(url: string): URL {
 async function githubJson(url: URL, signal?: AbortSignal): Promise<unknown> {
   const response = await fetch(url, {
     headers: { Accept: 'application/vnd.github+json' },
-    signal: signal ?? AbortSignal.timeout(25000),
+    signal: requestSignal(signal, 25000),
   });
   if (!response.ok)
     throw new Error(
@@ -67,7 +68,7 @@ export async function loadSourceContext(
     url.searchParams.set('ref', sha);
     const response = await fetch(url, {
       headers: { Accept: 'application/vnd.github.raw+json' },
-      signal: signal ?? AbortSignal.timeout(20000),
+      signal: requestSignal(signal, 20000),
     });
     if (!response.ok) throw new Error('Source request failed (' + response.status + ').');
     source = await response.text();
