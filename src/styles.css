@@ -644,17 +644,37 @@
   padding-left: 8px;
   min-width: 0;
 }
-.syntax-comment {
+.code-rows .hljs-comment,
+.code-rows .hljs-quote {
   color: #94a09a;
 }
-.syntax-string {
+.code-rows .hljs-string,
+.code-rows .hljs-regexp {
   color: #9acebc;
 }
-.syntax-keyword {
+.code-rows .hljs-keyword,
+.code-rows .hljs-selector-tag {
   color: #b79add;
 }
-.syntax-type {
+.code-rows .hljs-type,
+.code-rows .hljs-built_in {
   color: #d3b394;
+}
+.code-rows .hljs-number,
+.code-rows .hljs-literal {
+  color: #e2b284;
+}
+.code-rows .hljs-title,
+.code-rows .hljs-attr,
+.code-rows .hljs-property {
+  color: #adc6ef;
+}
+.code-rows .hljs-meta,
+.code-rows .hljs-tag,
+.code-rows .hljs-name,
+.code-rows .hljs-attribute,
+.code-rows .hljs-symbol {
+  color: #d5a8b8;
 }
 .code-footer {
   display: flex;
@@ -898,10 +918,36 @@
   justify-content: flex-end;
   margin-top: 15px;
 }
-.prompt-dialog {
-  max-width: 650px;
+.prompt-dialog,
+.models-dialog {
+  display: flex;
+  flex-direction: column;
+  max-width: min(650px, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+}
+.prompt-dialog > [data-slot='dialog-header'],
+.prompt-dialog > .dialog-actions,
+.models-dialog > [data-slot='dialog-header'],
+.models-dialog > button,
+.models-dialog > a {
+  flex-shrink: 0;
+}
+.prompt-dialog-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.prompt-dialog > .dialog-actions {
+  margin-top: 0;
 }
 .prompt-dialog textarea {
+  field-sizing: fixed;
+  height: clamp(7rem, 32dvh, 18rem);
+  min-height: 7rem;
+  max-height: 18rem;
+  overflow: auto;
+  resize: none;
   font-size: 12px;
   line-height: 1.8;
 }
@@ -1009,6 +1055,8 @@
 .model-list {
   display: grid;
   gap: 5px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .model-list button {
   justify-content: flex-start;
@@ -1016,30 +1064,13 @@
   font-weight: 400;
 }
 .model-source {
-  max-height: 500px;
-  overflow: auto;
-  background: #090b0b;
-  font:
-    12px/1.9 ui-monospace,
-    'SF Mono',
-    Menlo,
-    Consolas,
-    monospace;
-  padding: 12px 0;
-}
-.model-source > div {
   display: flex;
-  white-space: pre;
+  min-height: 0;
+  overflow: hidden;
 }
-.model-source > div > span {
-  width: 40px;
-  flex-shrink: 0;
-  color: var(--muted-foreground);
-  text-align: right;
-  padding-right: 10px;
-}
-.model-source code {
-  padding-right: 15px;
+.model-source .code-rows {
+  width: 100%;
+  max-height: 500px;
 }
 .model-source + a {
   font-size: 12px;

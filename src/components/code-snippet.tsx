@@ -1,35 +1,18 @@
+import { useMemo } from 'react';
 import { type CodeRow } from '@/domains/review';
+import { highlightCode } from '@/lib/code-highlighting';
 
-function HighlightedLine({ text }: { text: string }) {
-  const tokens = text.split(
-    /(\/\/.*$|'[^']*'|"[^"]*"|\b(?:if|return|const|await|let|new|undefined|async|throw|try|catch|export|class|private)\b|\b(?:Session|User|Order|StockLevel|RequestContext)\b)/g,
-  );
-  return (
-    <>
-      {tokens.map((token, index) => (
-        <span
-          key={index}
-          className={
-            token.startsWith('//')
-              ? 'syntax-comment'
-              : token.startsWith("'") || token.startsWith('"')
-                ? 'syntax-string'
-                : /^(if|return|const|await|let|new|undefined|async|throw|try|catch|export|class|private)$/.test(
-                      token,
-                    )
-                  ? 'syntax-keyword'
-                  : /^(Session|User|Order|StockLevel|RequestContext)$/.test(token)
-                    ? 'syntax-type'
-                    : undefined
-          }
-        >
-          {token}
-        </span>
-      ))}
-    </>
-  );
-}
-export function CodeSnippet({ rows }: { rows: CodeRow[] }) {
+export function CodeSnippet({
+  rows,
+  path,
+  format,
+}: {
+  rows: CodeRow[];
+  path: string;
+  format: 'source' | 'diff';
+}) {
+  const code = rows.map((row) => row.text).join('\n');
+  const tokens = useMemo(() => highlightCode(code, path, format), [code, path, format]);
   return (
     <div className="code-rows" role="region" aria-label="Source code" tabIndex={0}>
       {rows.map((row, index) => (
@@ -38,7 +21,11 @@ export function CodeSnippet({ rows }: { rows: CodeRow[] }) {
             {row.number ?? ''}
           </span>
           <code>
-            <HighlightedLine text={row.text} />
+            {tokens[index]?.map((token, tokenIndex) => (
+              <span key={tokenIndex} className={token.className}>
+                {token.text}
+              </span>
+            ))}
           </code>
         </div>
       ))}

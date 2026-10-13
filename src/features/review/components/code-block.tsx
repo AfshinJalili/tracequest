@@ -66,7 +66,7 @@ export function EvidenceCode({
         {block.missing ? (
           <p className="missing-code">{block.code}</p>
         ) : (
-          <CodeSnippet rows={block.rows} />
+          <CodeSnippet rows={block.rows} path={block.path} format="diff" />
         )}
         <div className="code-footer">
           <span>Unified diff</span>
@@ -126,7 +126,11 @@ export function ContextCode({ session, step }: { session: ReviewSession; step: R
       </CollapsibleTrigger>
       <CollapsibleContent>
         {result.kind === 'ready' ? (
-          <CodeSnippet rows={codeRows(result.source, step.context.start, 'source')} />
+          <CodeSnippet
+            rows={codeRows(result.source, step.context.start, 'source')}
+            path={step.context.path}
+            format="source"
+          />
         ) : result.kind === 'error' ? (
           <p role="alert">{result.message}</p>
         ) : (

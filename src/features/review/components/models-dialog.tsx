@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { CodeSnippet } from '@/components/code-snippet';
 import { type ReviewView } from '@/domains/review';
 export function ModelsDialog({
   view,
@@ -41,12 +42,7 @@ export function ModelsDialog({
               All models
             </Button>
             <div className="model-source">
-              {source.rows.map((row, index) => (
-                <div key={index}>
-                  <span>{row.number}</span>
-                  <code>{row.text}</code>
-                </div>
-              ))}
+              <CodeSnippet rows={source.rows} path={source.path} format="source" />
             </div>
             {source.url ? (
               <a href={source.url ?? undefined} target="_blank" rel="noopener noreferrer">
