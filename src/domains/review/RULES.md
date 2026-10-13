@@ -10,12 +10,16 @@ This module owns evidence identity, flow integrity, review transitions, coverage
 - An authored plan requires pinned base/head commits, project context, authorship metadata, behavior descriptions, actor, trigger, authorization, and step inputs/outputs/questions. Generic decorator/constructor flow names are rejected. Related blocks share behavior steps; the schema owns the authored-step limit.
 - Every block in a plan is assigned to a step or explicitly listed in `unmapped` with a reason. Unmapped code never becomes a fake flow and is visible in Coverage and the evidence browser.
 - Source context in authored steps must exist and fit within the cached full file. The source fingerprint detects stale snapshots; it is not a signature or a semantic-quality certificate.
+- New `story-v1` authored reviews require flow input/output examples and a reason for every step. Example and rationale source ranges must fit cached files and belong to `contextReviewed`. Old authored files remain compatible.
+- Examples distinguish source-traced demonstrations from claimed local executions. Executed examples require a command and environment; this metadata is not an execution attestation. Reasons distinguish source support from inferred intent.
+- `authoring.ts` owns the agent instructions and narrative-reference collection. The app prompt and preparation CLI use the same instructions. The CLI emits the JSON schema from `schema.ts`; it does not keep another contract.
 - `verifySourceSnapshot` checks a supplied repository snapshot against base/head pins, all changed paths, cached full files, and complete patch reconstruction. The CLI supplies Git values and stamps only after successful verification. Unavailable patches remain visible and cannot be inspected.
 - The shipped curated demo and old curated backups remain compatible. Their older context ranges are tolerated; authored imports use the strict contract. Legacy candidate/AI content is preserved as evidence requiring curation.
 - A step can be marked reviewed or flagged only after all available blocks are opened. Missing patches block inspection.
 - Shared evidence counts once in coverage. A flag remains until every referencing flagged step is resolved.
 - Replacing a plan requires the same evidence snapshot and pinned head. It carries notes and flags by overlapping evidence IDs. New flow steps require a fresh review.
 - Unchanged step definitions retain their notes, inspection status and checkpoint when a plan is updated. Changed steps require a fresh review. Reimporting an unchanged plan does not prefix notes again.
+- Changing a flow's story examples also requires its steps to be reviewed again; overlapping evidence still carries notes and flags.
 - Source fingerprints use a fixed English path ordering so browser and CLI locale settings cannot change the checksum.
 - Inspected code is not PR approval.
 

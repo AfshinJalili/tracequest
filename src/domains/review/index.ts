@@ -18,6 +18,7 @@ export type {
   ReviewStep,
   ReviewFlow,
   Position,
+  ReviewExample,
   EvidenceBlock,
   ChangedFile,
   PullRequest,
@@ -30,6 +31,7 @@ export { startReview, selectStep, saveNote, inspectStep, remapReview } from './s
 export { reviewView, positionForBlock, sourceUrl } from './view';
 export type { ReviewView, AuthoredReviewView } from './view';
 export { REVIEW_SYSTEM, agentReviewPrompt, stepContext } from './prompts';
+export { AUTHORING_INSTRUCTIONS, reviewPackJsonSchema } from './authoring';
 export { reviewReport } from './report';
 
 export { verifySourceSnapshot } from './source-verification';

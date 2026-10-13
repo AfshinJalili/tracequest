@@ -1,5 +1,9 @@
 # Application ownership
 
+Review authoring has one instruction owner, `src/domains/review/authoring.ts`. Its instructions are used by the app brief and `prepare-review.mjs`. The preparation adapter reads pinned Git source, checks exported evidence, and creates a research workspace with the application's generated JSON schema. The agent decides flows after tracing the repository; the adapter does not infer a call graph. `review-domain.mjs` loads the contract for both CLIs, and `review-repository.mjs` owns their committed source reads.
+
+Story examples and step reasons live inside the existing review pack. `validation.ts` checks narrative references and the newer `story-v1` requirements. `view.ts` computes source links and provenance labels. `story-details.tsx` displays those values in expandable sections. Keeping this in the review owner preserves import, export, and progress handling. A separate agent server or agent SDK was considered; the app cannot supply a private checkout to it, and adding one would create credential and runtime requirements without solving that access gap. File-based preparation lets the user's coding agent use its existing repository tools.
+
 `src/domains/review` owns the review. It parses evidence, validates flow references, decides inspection eligibility, computes progress, transfers notes, and produces presentation values. Its public API is `index.ts`; its rules are in `RULES.md`.
 
 `src/domains/preferences` owns browser-wide application preferences and their defaults. Keyboard shortcut settings apply across reviews and are persisted separately from PR progress. The review domain cannot own this setting because importing or replacing a review must not reset it.

@@ -27,6 +27,14 @@ Raw imports open **Evidence**, with a file picker and paged code blocks. They co
 
 Follow the [agent review workflow](docs/agent-review.md). The agent must read project docs, unchanged callers, models, authorization, and tests; explain behavior; and check its pack against the pinned source before handoff. A valid JSON file alone does not establish review quality.
 
+For larger PRs, prepare a workspace for the coding agent:
+
+```sh
+npm run prepare:review -- --pack evidence.json --repo /path/to/checkout --out /path/to/new-review-workspace --base main
+```
+
+Give the agent the generated `brief.md` and repository access. It discovers behaviors and records traces before writing steps. New story reviews contain concrete examples, state changes, and cited reasons. The app keeps the deeper details expandable and labels source-traced examples separately from claimed executions. Old reviews still load.
+
 ## Connect an AI provider
 
 Open **AI settings** and enter an OpenAI-compatible HTTPS base URL, model ID, and API key. The endpoint must allow browser CORS requests. The key stays in tab memory and is never saved or exported.

@@ -11,6 +11,7 @@ import { AiComposer } from '@/features/ai/ai-composer';
 import { StepNavigator } from './step-navigator';
 import { ContextCode, EvidenceCode } from './code-block';
 import { MissingContext } from './missing-context';
+import { FlowStory, StepRationale, StoryExamples } from './story-details';
 export type StepDetailTab = 'summary' | 'code' | 'ask';
 export function StepView({
   review,
@@ -58,6 +59,7 @@ export function StepView({
           </div>
         </dl>
       ) : null}
+      <FlowStory flow={view.flow} />
       <MissingContext gaps={view.contextMissing} />
       <StepNavigator view={view} onSelect={review.select} />
       <div className="step-heading">
@@ -106,6 +108,8 @@ export function StepView({
               <p>{view.step.output}</p>
             </div>
           </div>
+          {view.step.rationale ? <StepRationale rationale={view.step.rationale} /> : null}
+          {view.step.examples?.length ? <StoryExamples examples={view.step.examples} /> : null}
           <div className="review-question">
             <h4>Review question</h4>
             <p>{view.step.question}</p>

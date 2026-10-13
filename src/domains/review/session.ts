@@ -86,6 +86,11 @@ export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSes
   const previousSteps = new Map(
     session.pack.flows.flatMap((flow) => flow.steps).map((step) => [step.id, step]),
   );
+  const previousStories = new Map(
+    session.pack.flows.flatMap((flow) =>
+      flow.steps.map((step) => [step.id, flow.story] satisfies [StepId, typeof flow.story]),
+    ),
+  );
   const preserved = new Set<StepId>();
   const prior = [...previousSteps.values()].filter(
       (step) => session.state.notes[step.id] || session.state.stepStatus[step.id] === 'flag',
@@ -95,7 +100,11 @@ export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSes
   for (const flow of pack.flows)
     for (const step of flow.steps) {
       const previous = previousSteps.get(step.id);
-      if (previous && JSON.stringify(previous) === JSON.stringify(step)) {
+      if (
+        previous &&
+        JSON.stringify(previous) === JSON.stringify(step) &&
+        JSON.stringify(previousStories.get(step.id)) === JSON.stringify(flow.story)
+      ) {
         preserved.add(step.id);
         const note = session.state.notes[step.id],
           status = session.state.stepStatus[step.id];

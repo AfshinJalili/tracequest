@@ -1,5 +1,12 @@
 import { parseEvidence, hash } from './evidence';
-import { MAX_AUTHORED_STEPS, packSchema, type ReviewPack, type ReviewStep } from './schema';
+import { narrativeReferences } from './authoring';
+import {
+  AUTHORING_METHOD,
+  MAX_AUTHORED_STEPS,
+  packSchema,
+  type ReviewPack,
+  type ReviewStep,
+} from './schema';
 
 function validateSourceReference(pack: ReviewPack, context: NonNullable<ReviewStep['context']>) {
   const source = pack.sources[context.path];
@@ -55,7 +62,15 @@ export function validatePack(input: unknown): ReviewPack {
       if (step.blockIds.some((id) => !blocks.has(id)))
         throw new Error('Review references missing evidence.');
       step.blockIds.forEach((id) => assigned.add(id));
-      if (step.context && pack.mapping === 'authored') validateSourceReference(pack, step.context);
+      if (pack.mapping === 'authored')
+        for (const reference of narrativeReferences(flow, step)) {
+          validateSourceReference(pack, reference);
+          if (
+            (step.rationale || step.examples?.length || flow.story) &&
+            !pack.authorship?.contextReviewed.includes(reference.path)
+          )
+            throw new Error('Narrative references must be included in reviewed context.');
+        }
     }
   if (pack.mapping === 'evidence' && pack.flows.length)
     throw new Error('Evidence intake cannot contain review flows.');
@@ -87,6 +102,11 @@ export function validatePack(input: unknown): ReviewPack {
         `Group related evidence into fewer than ${MAX_AUTHORED_STEPS + 1} behavior steps.`,
       );
     for (const flow of pack.flows) {
+      if (
+        author.method === AUTHORING_METHOD &&
+        (!flow.story || flow.steps.some((step) => !step.rationale))
+      )
+        throw new Error('Story reviews require flow examples and a rationale for every step.');
       if (
         !flow.actor.trim() ||
         !flow.trigger.trim() ||

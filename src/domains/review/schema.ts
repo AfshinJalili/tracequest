@@ -4,6 +4,7 @@ export const MAX_NOTE_CHARACTERS = 20_000;
 export const MAX_IMPORT_BYTES = 3_000_000;
 export const MAX_BLOCK_LINES = 56;
 export const MAX_AUTHORED_STEPS = 120;
+export const AUTHORING_METHOD = 'story-v1';
 export const blockIdSchema = z.string().min(1).brand<'BlockId'>();
 export const stepIdSchema = z.string().min(1).brand<'StepId'>();
 export const flowIdSchema = z.string().min(1).brand<'FlowId'>();
@@ -22,6 +23,33 @@ export const contextSchema = z
     end: z.number().int().positive(),
   })
   .refine((value) => value.end >= value.start, 'Invalid source range');
+const narrativeText = z.string().trim().min(1);
+const exampleFields = {
+  title: narrativeText,
+  preconditions: narrativeText,
+  input: narrativeText,
+  output: narrativeText,
+  stateChange: narrativeText,
+  references: z.array(contextSchema).min(1),
+};
+export const exampleSchema = z.discriminatedUnion('basis', [
+  z.object({ ...exampleFields, basis: z.literal('traced') }),
+  z.object({
+    ...exampleFields,
+    basis: z.literal('executed'),
+    run: z.object({ command: narrativeText, environment: narrativeText }),
+  }),
+]);
+const rationaleSchema = z.object({
+  text: narrativeText,
+  basis: z.enum(['source', 'inference']),
+  references: z.array(contextSchema).min(1),
+});
+const storySchema = z.object({
+  input: narrativeText,
+  output: narrativeText,
+  examples: z.array(exampleSchema).min(1),
+});
 export const blockSchema = z.object({
   id: blockIdSchema,
   path: z.string().min(1),
@@ -42,6 +70,8 @@ export const stepSchema = z.object({
   question: z.string(),
   blockIds: z.tuple([blockIdSchema]).rest(blockIdSchema),
   context: contextSchema.optional(),
+  rationale: rationaleSchema.optional(),
+  examples: z.array(exampleSchema).optional(),
 });
 export const flowSchema = z.object({
   id: flowIdSchema,
@@ -51,6 +81,7 @@ export const flowSchema = z.object({
   actor: z.string().default(''),
   trigger: z.string().default(''),
   authorization: z.string().default(''),
+  story: storySchema.optional(),
   steps: z.tuple([stepSchema]).rest(stepSchema),
 });
 const commitSchema = z.object({ sha: z.string().regex(/^[a-f0-9]{40}$/) });
@@ -89,6 +120,7 @@ export const packSchema = z.object({
       contextReviewed: z.array(z.string().min(1)).min(1),
       missingContext: z.array(z.string().min(1)),
       verificationNotes: z.string().trim().min(1),
+      method: z.literal(AUTHORING_METHOD).optional(),
     })
     .optional(),
   sources: z.record(z.string(), z.string()).default({}),
@@ -115,3 +147,4 @@ export type ReviewPack = z.infer<typeof packSchema>;
 export type ReviewState = z.infer<typeof stateSchema>;
 export type ReviewSession = z.infer<typeof sessionSchema>;
 export type Position = z.infer<typeof positionSchema>;
+export type ReviewExample = z.infer<typeof exampleSchema>;

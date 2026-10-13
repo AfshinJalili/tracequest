@@ -1523,6 +1523,68 @@
   margin: 18px 0;
   color: var(--muted-foreground);
 }
+.story-detail {
+  margin: 14px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.8;
+  min-width: 0;
+}
+.story-detail summary {
+  cursor: pointer;
+  color: var(--foreground);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+.story-detail summary > span {
+  margin-left: 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+.story-detail p {
+  margin-top: 12px;
+}
+.story-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.story-values dt,
+.story-label {
+  display: block;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+.story-detail pre {
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 10px;
+  border-radius: 6px;
+  background: #090b0b;
+  color: #c5ccd1;
+  font-size: 12px;
+}
+.story-references {
+  margin-top: 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.story-references a:hover {
+  color: var(--foreground);
+}
+@media (max-width: 760px) {
+  .story-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .missing-context summary {
   cursor: pointer;
 }

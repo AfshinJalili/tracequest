@@ -5,6 +5,23 @@ export function repositoryGit(repo) {
     execFileSync('git', ['-C', repo, ...parameters], { encoding: 'utf8', maxBuffer: 50_000_000 });
 }
 
+export function pinReviewCommits(pack, repo, baseRef) {
+  const git = repositoryGit(repo);
+  const head = git('rev-parse', 'HEAD^{commit}').trim();
+  if (pack.pr.head && pack.pr.head.sha !== head)
+    throw new Error('Repository HEAD differs from the exported evidence.');
+  const comparison = baseRef ?? pack.pr.base?.sha;
+  if (!comparison) throw new Error('Supply --base when the evidence has no comparison base.');
+  const resolved = git(
+    'rev-parse',
+    '--verify',
+    '--end-of-options',
+    `${comparison}^{commit}`,
+  ).trim();
+  const base = git('merge-base', resolved, head).trim();
+  return { base: { sha: base }, head: { sha: head } };
+}
+
 export function readReviewSnapshot(pack, repo) {
   const git = repositoryGit(repo);
   const head = git('rev-parse', 'HEAD').trim();

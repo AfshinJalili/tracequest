@@ -1,6 +1,28 @@
 import { codeRows, evidenceForStep, isModelDefinition } from './evidence';
 import { hasReviewPlan } from './validation';
-import { type BlockId, type Position, type ReviewSession } from './schema';
+import {
+  type BlockId,
+  type Position,
+  type ReviewSession,
+  type ReviewExample,
+  type ReviewStep,
+} from './schema';
+
+function referenceView(session: ReviewSession, reference: NonNullable<ReviewStep['context']>) {
+  const url = sourceUrl(session, reference.path, reference.start);
+  return {
+    ...reference,
+    label: `${reference.path}:${reference.start}-${reference.end}`,
+    url: url && reference.end !== reference.start ? `${url}-L${reference.end}` : url,
+  };
+}
+function exampleView(session: ReviewSession, example: ReviewExample) {
+  return {
+    ...example,
+    basisLabel: example.basis === 'traced' ? 'Traced from source' : 'Executed',
+    references: example.references.map((reference) => referenceView(session, reference)),
+  };
+}
 function inspectionState(value: 'done' | 'flag' | undefined): 'done' | 'flag' | 'pending' {
   return value ?? 'pending';
 }
@@ -23,10 +45,27 @@ export function reviewView(session: ReviewSession, opened: ReadonlySet<BlockId>)
     missing = blocks.filter((block) => block.missing).length;
   const flowViews = (plan ? pack.flows : []).map((flow) => ({
     ...flow,
+    story: flow.story
+      ? {
+          ...flow.story,
+          examples: flow.story.examples.map((example) => exampleView(session, example)),
+        }
+      : undefined,
     stepCount: flow.steps.length,
     inspected: flow.steps.filter((step) => state.stepStatus[step.id]).length,
     steps: flow.steps.map((step, index) => ({
       ...step,
+      rationale: step.rationale
+        ? {
+            ...step.rationale,
+            basisLabel:
+              step.rationale.basis === 'source' ? 'Supported by source' : 'Inferred reason',
+            references: step.rationale.references.map((reference) =>
+              referenceView(session, reference),
+            ),
+          }
+        : undefined,
+      examples: step.examples?.map((example) => exampleView(session, example)),
       number: index + 1,
       status: inspectionState(state.stepStatus[step.id]),
       selected: state.position?.step === step.id,

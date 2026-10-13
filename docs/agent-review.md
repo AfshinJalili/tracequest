@@ -16,6 +16,20 @@ git diff BASE_SHA HEAD_SHA
 
 Replace the placeholders with the resolved SHAs. Preserve the exported `files`, `blocks`, block IDs, code, and ranges. If the diff or commit changes, export a new snapshot and re-author affected flows. Do not silently attach old explanations to new code.
 
+## Prepare an agent workspace
+
+For a large PR, give the agent files to read as needed instead of pasting the entire snapshot into its first message. Run this from the TraceQuest checkout after exporting evidence:
+
+```sh
+npm run prepare:review -- --pack /path/to/evidence.json --repo /path/to/repository --out /path/to/new-review-workspace --base main
+```
+
+Use a fresh output directory. Omit `--base` when the export already names the comparison base. Preparation resolves the merge base, checks HEAD against any existing pin, and verifies the full diff against committed source before writing anything. It rejects stale or incomplete evidence. It does not change the target source, run the target app, or generate flows. Saved review files are also accepted; preparation retains their evidence and context but clears the prior narrative in the new workspace.
+
+Give the coding agent `brief.md` and access to the target checkout. `repository.json` contains tracked paths and documentation candidates, not a guessed call graph. `evidence.json` holds the immutable exported source. `discovery.md` is where the agent records candidate stories, traces, scope decisions, and gaps. `review-schema.json` comes from the application's Zod schema. The agent writes `review.json`, then runs the verifier below. Rerunning preparation uses a new directory so it cannot overwrite authored work.
+
+The canonical authoring instructions live in `src/domains/review/authoring.ts`. Both **Agent review** in the app and the preparation command use that same text. Read it for discovery order, stopping conditions, story boundaries, step grouping, explanations, and examples. A connected question model receives the selected story, step contract, examples, reasons, and referenced source ranges; it does not gain repository access.
+
 ## Read the project before writing steps
 
 Read the PR description, repository AGENTS.md, domain rules, and relevant architecture docs. Trace changed entry points through unchanged callers, service functions, repositories, models, and tests. Include authorization and request ownership, input validation, transactions, external calls, mutations, caches, events, retries, failure paths, and observable outputs where they apply.
@@ -26,13 +40,17 @@ Separate observed behavior from inference. Run relevant tests when possible and 
 
 ## Describe behavior
 
+Discover the behaviors before building the steps. In `discovery.md`, record the actor's action, what changed from the base, its entry point, caller chain, relevant state transitions, final result, and material failures. Investigate unknowns in unchanged source and docs. Then choose flow boundaries and explain which candidates you combined. This working record lets another agent challenge the scope instead of trusting a polished summary.
+
 Make each flow a functionality with an actor, trigger, authorization boundary, and outcome. Name flows after behavior, such as “Create an order for the current customer.” Names such as “Trace Args” or “Trace constructor” are rejected.
 
 Order steps by execution and data transitions, including significant failure branches. Each step explains what happens, its input, its output or mutation, and a concrete review question. Use multiple `blockIds` when they support one behavior; share evidence between flows when appropriate. Splitting every code chunk into a step repeats the bug. The app caps authored plans at 120 steps; group supporting contracts and tests into the behavior they prove.
 
 Account for every block: reference it in a step or give an explicit `unmapped` reason. Generated files, unrelated formatting, or a behavior that lacks enough context can remain unmapped. Unmapped code remains visible and unreviewed. Missing patches cannot be marked inspected.
 
-Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr.head`, and replace `flows`. This example shows the fields to add; IDs and context paths must come from the actual exported snapshot:
+New agents use `authorship.method: "story-v1"`. This requires a flow `story` with inputs, outputs, and examples, plus a `rationale` for every step. Step examples are optional. Existing authored and curated files without this method still load.
+
+Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr.head`, and replace `flows`. This example shows the fields to add; IDs and context paths must come from the actual exported snapshot. Its values describe an illustrative order example, not a verified API:
 
 ```json
 {
@@ -46,6 +64,21 @@ Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr
       "actor": "Authenticated customer",
       "trigger": "createOrder mutation",
       "authorization": "The resolver requires a customer identity; the service checks order ownership.",
+      "story": {
+        "input": "Current customer and createOrder request",
+        "output": "The existing active order or a newly persisted order",
+        "examples": [
+          {
+            "title": "Customer already has an active order",
+            "basis": "traced",
+            "preconditions": "Illustrative values: authenticated customer 42 owns active order 73. Rows have not been seeded or tested.",
+            "input": "createOrder(customerId: 42)",
+            "output": "Order { id: 73, customerId: 42 }",
+            "stateChange": "No second order is inserted.",
+            "references": [{ "path": "src/orders/service.ts", "start": 30, "end": 72 }]
+          }
+        ]
+      },
       "steps": [
         {
           "id": "lock-customer",
@@ -55,6 +88,11 @@ Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr
           "input": "Customer ID and request transaction",
           "output": "A locked customer row or a not-found error",
           "question": "Can every caller reach this lock inside the same transaction?",
+          "rationale": {
+            "text": "Serializing the lookup and insert for this customer prevents two requests from creating separate active orders.",
+            "basis": "inference",
+            "references": [{ "path": "src/orders/service.ts", "start": 30, "end": 72 }]
+          },
           "blockIds": ["BLOCK_ID_FROM_EXPORT", "SECOND_BLOCK_ID_FROM_EXPORT"],
           "context": { "path": "src/orders/service.ts", "start": 30, "end": 72 }
         }
@@ -69,6 +107,7 @@ Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr
   ],
   "authorship": {
     "author": "Repository review agent",
+    "method": "story-v1",
     "sourceFingerprint": "pending",
     "contextReviewed": ["AGENTS.md", "src/orders/service.ts", "src/orders/resolver.ts"],
     "missingContext": ["Database integration tests could not run without the test database."],
@@ -78,6 +117,10 @@ Start from the evidence JSON, set `mapping` to `authored`, add `pr.base` and `pr
 ```
 
 Merge these fields into the evidence JSON, retaining `version`, `id`, `pr`, `files`, `blocks`, `sources`, and `entities`. Populate `sources` with full files and use truthful explanations specific to the PR. This example is a shape reference, not verified repository behavior. The runtime schema lives in `src/domains/review/schema.ts`; validation has one implementation in `validation.ts`.
+
+Examples use literal input, expected or observed output, preconditions, state changes, and source references. A `traced` example follows from source and may use clearly labeled demonstration values. An `executed` example must also include `run: {command,environment}` and the actual observed output. The schema requires these fields but cannot attest that the agent ran the command. Reasons use `basis: "source"` for supported mechanisms or documented intent and `"inference"` for a deduction. All narrative references must fit cached full source files listed in `contextReviewed`.
+
+The app shows the flow overview, examples, and “Why this step” as expandable details. Their source links point at pinned commits. The exported review JSON retains them. A short summary remains the first thing the reviewer reads.
 
 ## Check against the repository
 
