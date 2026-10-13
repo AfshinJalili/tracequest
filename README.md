@@ -21,6 +21,8 @@ Open **Review actions → Import PR**. Import a public GitHub URL, a unified `.d
 
 Select a named step and open every code block before marking it reviewed. Flags and notes stay attached to their step. Coverage counts shared evidence once. Inspection records progress; it does not approve a PR.
 
+Evidence and Coverage support file search. Mobile has direct Review/Evidence, Coverage, and Notes navigation. Step shortcuts act only in the review view. Updating a pack preserves unchanged steps and their notes; changed steps need another inspection.
+
 Raw imports open **Evidence**, with a file picker and paged code blocks. They contain no review flows or steps. Open **Agent review** to export a brief for a coding agent with access to the full repository, then import its authored review JSON. Unmapped evidence and missing project context remain visible.
 
 Follow the [agent review workflow](docs/agent-review.md). The agent must read project docs, unchanged callers, models, authorization, and tests; explain behavior; and check its pack against the pinned source before handoff. A valid JSON file alone does not establish review quality.
@@ -30,6 +32,8 @@ Follow the [agent review workflow](docs/agent-review.md). The agent must read pr
 Open **AI settings** and enter an OpenAI-compatible HTTPS base URL, model ID, and API key. The endpoint must allow browser CORS requests. The key stays in tab memory and is never saved or exported.
 
 Questions send only the current step's evidence and available pinned context. Without credentials, copy that context into ChatGPT or a coding agent. Authoring a review plan uses the full-repository agent workflow rather than a patch-only model request.
+
+Questions and answers remain available when switching between Code and Ask AI for the current step. Requests have a deadline and can be stopped. Cancelled requests cannot apply late results.
 
 ## Check changes
 

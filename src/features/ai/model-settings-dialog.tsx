@@ -78,8 +78,8 @@ export function ModelSettingsDialog({
             required
           />
           <p className="form-help">
-            Questions send this step's code to the provider. Flow generation sends changed-code
-            blocks. Providers must allow browser CORS requests.
+            Questions send this step's code to the provider. The endpoint must allow browser CORS
+            requests.
           </p>
           {error ? (
             <p className="form-error" role="alert">

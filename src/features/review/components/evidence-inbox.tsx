@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { type BlockId, type ReviewSession, type ReviewView } from '@/domains/review';
 import { downloadText } from '@/integrations/files';
 import { EvidenceCode } from './code-block';
@@ -13,6 +14,7 @@ export function EvidenceInbox({
   onPrepare,
   onImport,
   onBack,
+  onClearSelection,
 }: {
   view: ReviewView;
   session: ReviewSession;
@@ -21,21 +23,27 @@ export function EvidenceInbox({
   onPrepare: () => void;
   onImport: () => void;
   onBack: () => void;
+  onClearSelection: () => void;
 }) {
   const [path, setPath] = useState('');
   const [page, setPage] = useState(0);
-  const files = view.kind === 'review' ? view.unmappedFiles : view.evidenceFiles;
+  const [query, setQuery] = useState('');
+  const available = view.kind === 'review' ? view.unmappedFiles : view.evidenceFiles;
+  const files = available.filter((file) =>
+    file.path.toLowerCase().includes(query.trim().toLowerCase()),
+  );
   const target = selectedId ? view.blocks.find((block) => block.id === selectedId)?.path : null;
   const file = files.find((file) => file.path === (target ?? path)) ?? files[0];
   const selectedIndex = file?.blocks.findIndex((block) => block.id === selectedId) ?? -1;
-  const currentPage = selectedIndex >= 0 ? Math.floor(selectedIndex / PAGE_SIZE) : page;
+  const currentPage = Math.min(
+    selectedIndex >= 0 ? Math.floor(selectedIndex / PAGE_SIZE) : page,
+    Math.max(0, Math.ceil((file?.blocks.length ?? 0) / PAGE_SIZE) - 1),
+  );
   const visible = file?.blocks.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE) ?? [];
   return (
     <section className="secondary-view evidence-inbox">
       <h2>{view.kind === 'review' ? 'Unmapped evidence' : 'Evidence imported'}</h2>
-      {view.kind === 'evidence' ? (
-        <p>Import an agent-authored review pack to review behavior. Raw code has no review plan.</p>
-      ) : null}
+      {view.kind === 'evidence' ? <p>Import an authored review pack to start reviewing.</p> : null}
       <div className="evidence-intake-actions">
         <Button onClick={onPrepare}>Agent review</Button>
         <Button variant="outline" onClick={onImport}>
@@ -60,6 +68,19 @@ export function EvidenceInbox({
         ) : null}
       </div>
       <MissingContext gaps={view.contextMissing} />
+      <Input
+        type="search"
+        aria-label="Filter source files"
+        placeholder="Filter files…"
+        value={query}
+        onChange={(event) => {
+          onClearSelection();
+          setQuery(event.target.value);
+          setPath('');
+          setPage(0);
+        }}
+        className="evidence-search"
+      />
       {file ? (
         <>
           <label className="evidence-file-label" htmlFor="evidence-file">
@@ -69,7 +90,7 @@ export function EvidenceInbox({
             id="evidence-file"
             value={file.path}
             onChange={(event) => {
-              onBack();
+              onClearSelection();
               setPath(event.target.value);
               setPage(0);
             }}
@@ -82,32 +103,35 @@ export function EvidenceInbox({
           </select>
           <div className="evidence-page-controls">
             <span>
-              {files.length} files · {file.blocks.length} blocks in this file
+              Blocks {currentPage * PAGE_SIZE + 1}–
+              {Math.min((currentPage + 1) * PAGE_SIZE, file.blocks.length)} of {file.blocks.length}
             </span>
-            <div>
-              <Button
-                variant="ghost"
-                disabled={currentPage === 0}
-                onClick={() => {
-                  setPath(file.path);
-                  onBack();
-                  setPage(currentPage - 1);
-                }}
-              >
-                Previous blocks
-              </Button>
-              <Button
-                variant="ghost"
-                disabled={(currentPage + 1) * PAGE_SIZE >= file.blocks.length}
-                onClick={() => {
-                  setPath(file.path);
-                  onBack();
-                  setPage(currentPage + 1);
-                }}
-              >
-                Next blocks
-              </Button>
-            </div>
+            {file.blocks.length > PAGE_SIZE ? (
+              <div>
+                <Button
+                  variant="ghost"
+                  disabled={currentPage === 0}
+                  onClick={() => {
+                    setPath(file.path);
+                    onClearSelection();
+                    setPage(currentPage - 1);
+                  }}
+                >
+                  Previous blocks
+                </Button>
+                <Button
+                  variant="ghost"
+                  disabled={(currentPage + 1) * PAGE_SIZE >= file.blocks.length}
+                  onClick={() => {
+                    setPath(file.path);
+                    onClearSelection();
+                    setPage(currentPage + 1);
+                  }}
+                >
+                  Next blocks
+                </Button>
+              </div>
+            ) : null}
           </div>
           <div className="code-evidence-list">
             {visible.map((block) => (
@@ -121,7 +145,7 @@ export function EvidenceInbox({
           </div>
         </>
       ) : (
-        <p>No unmapped evidence.</p>
+        <p>{query ? 'No matching files.' : 'No unmapped evidence.'}</p>
       )}
     </section>
   );

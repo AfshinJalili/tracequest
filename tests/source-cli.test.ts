@@ -9,7 +9,7 @@ it('verifies an authored pack against a real checkout before stamping it', () =>
   const repo = mkdtempSync(path.join(tmpdir(), 'tracequest-source-'));
   const git = (...args: string[]) =>
     execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' }).trim();
-  const verify = (...args: string[]) =>
+  const verifyWithEnvironment = (environment: NodeJS.ProcessEnv, ...args: string[]) =>
     execFileSync(
       process.execPath,
       [
@@ -20,14 +20,17 @@ it('verifies an authored pack against a real checkout before stamping it', () =>
         repo,
         ...args,
       ],
-      { encoding: 'utf8', stdio: 'pipe' },
+      { encoding: 'utf8', stdio: 'pipe', env: environment },
     );
+  const verify = (...args: string[]) => verifyWithEnvironment(process.env, ...args);
   try {
     git('init', '-q');
     git('config', 'user.name', 'Source verification fixture');
     git('config', 'user.email', 'fixture@example.invalid');
     writeFileSync(path.join(repo, 'AGENTS.md'), 'Require request ownership before reserving.\n');
     writeFileSync(path.join(repo, 'caller.js'), "import { reserve } from './service.js';\n");
+    writeFileSync(path.join(repo, 'ä-policy.md'), 'Policy A\n');
+    writeFileSync(path.join(repo, 'z-policy.md'), 'Policy Z\n');
     writeFileSync(
       path.join(repo, 'service.js'),
       'export function reserve(user) { return user.id; }\n',
@@ -60,6 +63,8 @@ it('verifies an authored pack against a real checkout before stamping it', () =>
         'AGENTS.md': readFileSync(path.join(repo, 'AGENTS.md'), 'utf8'),
         'caller.js': readFileSync(path.join(repo, 'caller.js'), 'utf8'),
         'service.js': source,
+        'ä-policy.md': 'Policy A\n',
+        'z-policy.md': 'Policy Z\n',
       },
       flows: [
         {
@@ -100,6 +105,9 @@ it('verifies an authored pack against a real checkout before stamping it', () =>
     const pack = validatePack(stamped);
     expect(pack.authorship?.sourceFingerprint).not.toBe('pending');
     expect(verify()).toContain('Semantic review and an app walkthrough are still required.');
+    expect(
+      verifyWithEnvironment({ ...process.env, LANG: 'sv_SE.UTF-8', LC_ALL: 'sv_SE.UTF-8' }),
+    ).toContain(`Source checked at ${head}`);
 
     writeFileSync(file, JSON.stringify({ ...pack, pr: { ...pack.pr, head: { sha: base } } }));
     expect(() => verify('--stamp')).toThrow(/commits do not match/);

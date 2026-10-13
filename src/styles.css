@@ -1053,11 +1053,39 @@
 .flow-sheet > .flow-list {
   margin: 15px 0;
 }
-.mobile-secondary-nav {
-  display: flex;
-  gap: 10px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
+.mobile-review-navigation {
+  display: none;
+}
+.evidence-search {
+  margin: 18px 0 14px;
+}
+@media (max-width: 760px) {
+  .mobile-review-navigation {
+    display: block;
+    margin-bottom: 18px;
+  }
+  .mobile-review-navigation .review-navigation {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .mobile-review-navigation .review-navigation button {
+    justify-content: center;
+    min-height: 38px;
+    padding: 8px;
+    font-size: 12px;
+  }
+  .flow-context > div {
+    grid-template-columns: 80px minmax(0, 1fr);
+    gap: 8px;
+  }
+}
+.app-error > button + button {
+  margin-left: 10px;
 }
 .app-loading {
   min-height: 100dvh;

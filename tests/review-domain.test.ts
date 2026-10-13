@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import demo from '../public/demo.json';
 import raw from './fixtures/demo-source.json';
+import { authoredDemo } from './review-fixture';
 import {
   blockIdSchema,
   buildPack,
@@ -21,6 +22,45 @@ const pack = validatePack(demo);
 const firstFlow = pack.flows[0];
 if (!firstFlow) throw new Error('Demo flow missing.');
 describe('review domain', () => {
+  it('requires a new inspection when the selected step explanation changes', () => {
+    const authored = authoredDemo(),
+      flow = authored.flows[0];
+    if (!flow) throw new Error('Fixture missing');
+    const step = flow.steps[0];
+    const session = inspectStep(startReview(authored), step, new Set(step.blockIds), 'done');
+    const revised = validatePack({
+      ...authored,
+      flows: [
+        {
+          ...flow,
+          steps: [{ ...step, summary: 'Revised behavior explanation' }, ...flow.steps.slice(1)],
+        },
+        ...authored.flows.slice(1),
+      ],
+    });
+    const next = remapReview(session, revised);
+    expect(next.state.stepStatus[step.id]).toBeUndefined();
+    expect(next.state.position?.step).toBe(step.id);
+  });
+  it('preserves unchanged progress and notes when an authored plan is reimported', () => {
+    const authored = authoredDemo(),
+      flow = authored.flows[0];
+    if (!flow) throw new Error('Fixture flow missing');
+    const step = flow.steps[0],
+      next = flow.steps[1];
+    if (!next) throw new Error('Fixture checkpoint missing');
+    let session = inspectStep(startReview(authored), step, new Set(step.blockIds), 'done');
+    session = saveNote(session, step, 'Check request ownership');
+    session = selectStep(session, { flow: flow.id, step: next.id });
+    const revised = validatePack({
+      ...authored,
+      authorship: { ...authored.authorship, verificationNotes: 'Additional test run' },
+    });
+    const restored = remapReview(remapReview(session, revised), revised);
+    expect(restored.state.notes[step.id]).toBe('Check request ownership');
+    expect(restored.state.stepStatus[step.id]).toBe('done');
+    expect(restored.state.position).toEqual(session.state.position);
+  });
   it('preserves every line and stable evidence ID from the real Vendure PR', () => {
     const generated = parseEvidence(pack.files);
     expect(generated).toHaveLength(14);

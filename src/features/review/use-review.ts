@@ -126,6 +126,7 @@ export function useReview() {
         select(position);
         open(id);
       }
+      return position ? 'review' : 'evidence';
     },
     [load, select, open],
   );

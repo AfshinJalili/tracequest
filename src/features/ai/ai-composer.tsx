@@ -12,6 +12,7 @@ export function AiComposer({
   onSettings,
   onPrompt,
   questionInput,
+  active,
 }: {
   session: ReviewSession;
   step: ReviewStep;
@@ -19,12 +20,16 @@ export function AiComposer({
   onSettings: () => void;
   onPrompt: (request: PromptRequest) => void;
   questionInput: RefObject<HTMLTextAreaElement | null>;
+  active: boolean;
 }) {
   const [question, setQuestion] = useState(''),
     [answer, setAnswer] = useState(''),
     [error, setError] = useState(''),
     [pending, setPending] = useState(false);
   const controller = useRef<AbortController | null>(null);
+  useEffect(() => {
+    if (active) questionInput.current?.focus();
+  }, [active, questionInput]);
   useEffect(() => {
     setQuestion('');
     setAnswer('');
@@ -79,7 +84,6 @@ export function AiComposer({
       >
         <Textarea
           ref={questionInput}
-          autoFocus
           aria-label="Question about this step"
           value={question}
           onChange={(event) => setQuestion(event.target.value)}
@@ -89,6 +93,19 @@ export function AiComposer({
         <div className="composer-toolbar">
           <span>{settings ? settings.model : 'No model connected'}</span>
           <div>
+            {pending ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  controller.current?.abort();
+                  setPending(false);
+                }}
+              >
+                Stop
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="ghost"
@@ -109,6 +126,7 @@ export function AiComposer({
               size="icon-sm"
               disabled={pending || !question.trim()}
               aria-label="Ask AI"
+              aria-busy={pending}
             >
               {pending ? '…' : <ArrowUp />}
             </Button>

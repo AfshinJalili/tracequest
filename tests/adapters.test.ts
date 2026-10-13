@@ -5,6 +5,23 @@ import { importPublicPr } from '@/integrations/github';
 import { askModel } from '@/integrations/model';
 import { importReviewFile } from '@/integrations/files';
 import { fileImportLimits, startReview, validatePack } from '@/domains/review';
+it('reports the provider status when an error response contains HTML', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('<html>Unavailable</html>', { status: 502 })),
+  );
+  const session = startReview(validatePack(demo)),
+    step = session.pack.flows[0]?.steps[0];
+  if (!step) throw new Error('Fixture missing');
+  await expect(
+    askModel(
+      { endpoint: 'https://api.example.invalid/v1', model: 'test', key: 'test' },
+      session,
+      step,
+      'Why?',
+    ),
+  ).rejects.toThrow(/502/);
+});
 it('restores a large exported review even when the backup exceeds the raw diff limit', async () => {
   const diff =
     'diff --git a/module.ts b/module.ts\n--- a/module.ts\n+++ b/module.ts\n@@ -0,0 +1,100000 @@\n' +

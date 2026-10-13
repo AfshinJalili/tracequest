@@ -46,7 +46,7 @@ function HighlightedLine({ text }: { text: string }) {
 }
 function CodeRows({ rows }: { rows: CodeRow[] }) {
   return (
-    <div className="code-rows" role="region" aria-label="Source code">
+    <div className="code-rows" role="region" aria-label="Source code" tabIndex={0}>
       {rows.map((row, index) => (
         <div key={index} className={'code-row ' + row.change}>
           <span className="line-number" aria-hidden="true">
@@ -79,7 +79,11 @@ export function EvidenceCode({
     <Collapsible open={open} onOpenChange={toggle} className="evidence-code">
       <div className="code-header">
         <CollapsibleTrigger asChild>
-          <Button variant="ghost" className="code-trigger" aria-label={'Open code ' + block.path}>
+          <Button
+            variant="ghost"
+            className="code-trigger"
+            aria-label={(open ? 'Close code ' : 'Open code ') + block.path}
+          >
             <ChevronDown className={open ? 'open' : ''} />
             <FileCode2 />
             <span>{block.path}</span>
@@ -134,7 +138,9 @@ export function ContextCode({ session, step }: { session: ReviewSession; step: R
     const controller = new AbortController();
     setResult({ kind: 'loading' });
     void loadSourceContext(session, step, controller.signal).then(
-      (source) => setResult({ kind: 'ready', source }),
+      (source) => {
+        if (!controller.signal.aborted) setResult({ kind: 'ready', source });
+      },
       (error) => {
         if (!controller.signal.aborted)
           setResult({
@@ -144,7 +150,15 @@ export function ContextCode({ session, step }: { session: ReviewSession; step: R
       },
     );
     return () => controller.abort();
-  }, [open, session.pack.id, step.id]);
+  }, [
+    open,
+    session.pack.id,
+    session.pack.pr.head?.sha,
+    session.pack.sources,
+    step.context?.path,
+    step.context?.start,
+    step.context?.end,
+  ]);
   if (!step.context) return null;
   return (
     <Collapsible open={open} onOpenChange={setOpen} className="context-code">

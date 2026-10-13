@@ -30,12 +30,24 @@ async function complete(
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
+    if (error instanceof DOMException && error.name === 'TimeoutError')
+      throw new Error('The model request timed out. Try again.', { cause: error });
     throw new Error(
       'Could not reach the model. Check endpoint, network and provider CORS support.',
       { cause: error },
     );
   }
-  const data: unknown = await response.json();
+  let data: unknown;
+  try {
+    data = await response.json();
+  } catch (error) {
+    throw new Error(
+      response.ok
+        ? 'The provider returned an unreadable answer.'
+        : 'Provider returned ' + response.status,
+      { cause: error },
+    );
+  }
   if (!response.ok) {
     const providerError = errorSchema.safeParse(data);
     throw new Error(

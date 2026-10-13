@@ -1,7 +1,7 @@
 import { File as NativeFile, Blob as NativeBlob } from 'node:buffer';
 import { URL as NativeURL } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ReviewPage } from '@/features/review/review-page';
@@ -10,7 +10,8 @@ import { buildPack, decodeSession, sourceFingerprint, startReview } from '@/doma
 import { importReviewFile } from '@/integrations/files';
 import { loadReview, persistReview } from '@/persistence/review-storage';
 import { loadPreferences } from '@/persistence/preferences-storage';
-import { authoredDemo, largeBackendFiles } from './review-fixture';
+import { authoredDemo, largeBackendFiles, partlyMappedReview } from './review-fixture';
+import { ContextCode } from '@/features/review/components/code-block';
 const nativeFetch = globalThis.fetch;
 function mount() {
   return render(
@@ -32,6 +33,197 @@ beforeEach(() => {
   );
 });
 describe('review application', () => {
+  it('browses and filters unmapped evidence without leaving the evidence screen', async () => {
+    const pack = partlyMappedReview();
+    persistReview(startReview(pack));
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Validate requests', level: 2 });
+    await user.click(
+      within(screen.getByRole('complementary')).getByRole('button', { name: 'Coverage' }),
+    );
+    const entry = screen.getAllByRole('button', { name: /large-service\.ts/ })[0];
+    if (!entry) throw new Error('Unmapped fixture missing');
+    await user.click(entry);
+    await screen.findByRole('heading', { name: 'Unmapped evidence' });
+    await user.click(screen.getByRole('button', { name: 'Next blocks' }));
+    expect(screen.getByRole('heading', { name: 'Unmapped evidence' })).toBeInTheDocument();
+    expect(screen.getByText(/Blocks 13–24/)).toBeInTheDocument();
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'Source file' }),
+      'other-service.ts',
+    );
+    expect(screen.getByRole('heading', { name: 'Unmapped evidence' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^Open code / })).toHaveLength(1);
+    await user.type(screen.getByRole('searchbox', { name: 'Filter source files' }), 'large');
+    expect(screen.getByRole('combobox', { name: 'Source file' })).toHaveValue('large-service.ts');
+    await user.click(screen.getByRole('button', { name: 'Back to flow' }));
+    expect(
+      screen.getByRole('heading', { name: 'Validate requests', level: 2 }),
+    ).toBeInTheDocument();
+  });
+  it('keeps the checkpoint unchanged when shortcuts are pressed in Coverage', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    const sidebar = within(screen.getByRole('complementary'));
+    await user.click(sidebar.getByRole('button', { name: 'Coverage' }));
+    sidebar.getByRole('button', { name: 'Close sidebar' }).focus();
+    await user.keyboard('j');
+    await user.click(sidebar.getByRole('button', { name: 'Review' }));
+    expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Enter the active-order lookup' }),
+    ).toBeInTheDocument();
+  });
+  it('keeps the question and AI answer when switching between code and AI', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    await user.click(screen.getByRole('button', { name: 'Ask AI' }));
+    await user.click(screen.getByRole('button', { name: 'AI settings' }));
+    const settings = screen.getByRole('dialog', { name: 'AI settings' });
+    fireEvent.change(within(settings).getByLabelText('API base URL'), {
+      target: { value: 'https://api.example.invalid/v1' },
+    });
+    fireEvent.change(within(settings).getByLabelText('Model ID'), {
+      target: { value: 'test-model' },
+    });
+    fireEvent.change(within(settings).getByLabelText('API key'), { target: { value: 'test-key' } });
+    await user.click(within(settings).getByRole('button', { name: 'Connect' }));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ choices: [{ message: { content: 'Verify the lock boundary.' } }] }),
+            { status: 200 },
+          ),
+      ),
+    );
+    await user.type(screen.getByLabelText('Question about this step'), 'Why this lock?');
+    const form = screen.getByLabelText('Question about this step').closest('form');
+    if (!form) throw new Error('Question form missing');
+    await user.click(within(form).getByRole('button', { name: 'Ask AI' }));
+    await screen.findByText('Verify the lock boundary.');
+    await user.click(screen.getByRole('tab', { name: 'Code' }));
+    await user.click(screen.getByRole('button', { name: 'Ask AI' }));
+    expect(screen.getByLabelText('Question about this step')).toHaveValue('Why this lock?');
+    expect(screen.getByText('Verify the lock boundary.')).toBeVisible();
+    let release: (response: Response) => void = () => {
+      throw new Error('Request not started');
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            release = resolve;
+          }),
+      ),
+    );
+    const resumedForm = screen.getByLabelText('Question about this step').closest('form');
+    if (!resumedForm) throw new Error('Question form missing');
+    await user.click(within(resumedForm).getByRole('button', { name: 'Ask AI' }));
+    await user.click(screen.getByRole('button', { name: 'Stop' }));
+    await act(async () => {
+      release(
+        new Response(JSON.stringify({ choices: [{ message: { content: 'Cancelled response' } }] })),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.queryByText('Cancelled response')).toBeNull();
+    expect(within(resumedForm).getByRole('button', { name: 'Ask AI' })).toBeEnabled();
+  });
+  it('ignores a cancelled GitHub import after a new diff has been imported', async () => {
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Active order creation' });
+    let release: (response: Response) => void = () => {
+      throw new Error('Request not started');
+    };
+    const fetch = vi.fn((url: RequestInfo | URL) =>
+      String(url).includes('/files')
+        ? Promise.resolve(new Response(JSON.stringify(demo.files)))
+        : new Promise<Response>((resolve) => {
+            release = resolve;
+          }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Import PR' }));
+    fireEvent.change(screen.getByLabelText('Public PR URL'), {
+      target: { value: 'https://github.com/vendurehq/vendure/pull/5259' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Load PR' }));
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await user.click(screen.getByRole('button', { name: 'Review actions' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Import PR' }));
+    const importer = screen.getByRole('dialog', { name: 'Import review' });
+    await user.click(within(importer).getByRole('tab', { name: 'Paste diff' }));
+    fireEvent.change(screen.getByLabelText('Unified diff'), {
+      target: { value: 'diff --git a/new.ts b/new.ts\n@@ -0,0 +1 @@\n+newCode();' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Import diff' }));
+    await screen.findByRole('heading', { name: 'Evidence imported' });
+    await act(async () => {
+      release(new Response(JSON.stringify({ ...demo.pr, changed_files: demo.files.length })));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Local backend change');
+  });
+  it('offers import recovery when saved review data is corrupt', async () => {
+    vi.spyOn(Storage.prototype, 'getItem').mockReturnValue('corrupt JSON');
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Could not load review' });
+    await user.click(screen.getByRole('button', { name: 'Import review' }));
+    expect(screen.getByRole('dialog', { name: 'Import review' })).toBeInTheDocument();
+  });
+  it('exposes mobile view navigation for raw evidence', async () => {
+    persistReview(startReview(buildPack({ title: 'Raw evidence' }, largeBackendFiles())));
+    const user = userEvent.setup();
+    mount();
+    await screen.findByRole('heading', { name: 'Evidence imported' });
+    const navigation = within(screen.getByRole('navigation', { name: 'Mobile review views' }));
+    await user.click(navigation.getByRole('button', { name: 'Coverage' }));
+    expect(screen.getByRole('heading', { name: 'Coverage' })).toBeInTheDocument();
+    await user.click(navigation.getByRole('button', { name: 'Evidence' }));
+    expect(screen.getByRole('heading', { name: 'Evidence imported' })).toBeInTheDocument();
+  });
+  it('does not replace refreshed source context with a cancelled response', async () => {
+    const pack = authoredDemo(),
+      original = pack.flows[0]?.steps[0];
+    if (!original?.context) throw new Error('Context fixture missing');
+    const session = startReview({ ...pack, sources: {} }),
+      step = { ...original, context: { ...original.context, start: 1, end: 1 } };
+    let release: (response: Response) => void = () => {
+      throw new Error('Request not started');
+    };
+    const fetch = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            release = resolve;
+          }),
+      )
+      .mockResolvedValue(new Response('latestContext'));
+    vi.stubGlobal('fetch', fetch);
+    const user = userEvent.setup();
+    render(<ContextCode session={session} step={step} />);
+    const toggle = screen.getByRole('button', { name: /^Unchanged context/ });
+    await user.click(toggle);
+    await user.click(toggle);
+    await user.click(toggle);
+    await screen.findByText('latestContext');
+    await act(async () => {
+      release(new Response('staleContext'));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByText('latestContext')).toBeVisible();
+    expect(screen.queryByText('staleContext')).toBeNull();
+  });
   it('imports 73 raw files as manageable evidence without a review plan', async () => {
     const user = userEvent.setup();
     mount();
@@ -188,7 +380,9 @@ describe('review application', () => {
     expect(copied.value).toContain('Why lock the owner?');
     expect(copied.value).toContain('active-order.service.ts');
     await user.click(within(context).getByRole('button', { name: 'Close' }));
-    await user.click(screen.getByRole('button', { name: 'Coverage' }));
+    await user.click(
+      within(screen.getByRole('complementary')).getByRole('button', { name: 'Coverage' }),
+    );
     await user.click(ask);
     expect(screen.getByRole('heading', { name: 'Active order creation' })).toBeInTheDocument();
     expect(screen.getByRole('textbox', { name: 'Question about this step' })).toHaveFocus();

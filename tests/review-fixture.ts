@@ -1,5 +1,51 @@
 import demo from '../public/demo.json';
-import { sourceFingerprint, validatePack } from '@/domains/review';
+import { buildPack, sourceFingerprint, validatePack } from '@/domains/review';
+
+export function partlyMappedReview() {
+  const evidence = buildPack(
+    { title: 'Validate requests', base: { sha: '0'.repeat(40) }, head: { sha: '1'.repeat(40) } },
+    ['entry.ts', 'large-service.ts', 'other-service.ts'].map((filename, index) => {
+      const count = index === 1 ? 1500 : 1;
+      return {
+        filename,
+        patch: `@@ -0,0 +1,${count} @@\n` + '+reserve();\n'.repeat(count).trimEnd(),
+        additions: count,
+        deletions: 0,
+      };
+    }),
+  );
+  const first = evidence.blocks[0];
+  const sample = authoredDemo(),
+    flow = sample.flows[0];
+  if (!first || !flow) throw new Error('Fixture missing');
+  const step = flow.steps[0];
+  const proposed = {
+    ...evidence,
+    mapping: 'authored',
+    sources: { 'AGENTS.md': 'Fixture rules\n' },
+    flows: [
+      {
+        ...flow,
+        title: 'Validate requests',
+        steps: [{ ...step, context: undefined, blockIds: [first.id] }],
+      },
+    ],
+    unmapped: evidence.blocks
+      .slice(1)
+      .map((block) => ({ blockId: block.id, reason: 'Requires another behavior review' })),
+    authorship: {
+      author: 'Test fixture',
+      sourceFingerprint: 'pending',
+      contextReviewed: ['AGENTS.md'],
+      missingContext: ['Synthetic source fixture'],
+      verificationNotes: 'UI test data only',
+    },
+  };
+  return validatePack({
+    ...proposed,
+    authorship: { ...proposed.authorship, sourceFingerprint: sourceFingerprint(proposed) },
+  });
+}
 
 export function authoredDemo() {
   const pack = validatePack(demo);

@@ -36,7 +36,7 @@ import { ImportDialog } from '@/features/import/import-dialog';
 import { SettingsDialog } from '@/features/settings/settings-dialog';
 import { usePreferences } from '@/features/settings/use-preferences';
 import { ReviewSidebar } from './components/review-sidebar';
-import { type ReviewScreen } from './components/review-navigation';
+import { ReviewNavigation, type ReviewScreen } from './components/review-navigation';
 import { FlowList } from './components/flow-list';
 import { EvidenceInbox } from './components/evidence-inbox';
 import { StepView, type StepDetailTab } from './components/step-view';
@@ -52,7 +52,9 @@ export function ReviewPage() {
   const { preferences, setKeyboardShortcuts } = usePreferences();
   const [screen, setScreen] = useState<ReviewScreen>('review'),
     [sidebarOpen, setSidebarOpen] = useState(true),
-    [detail, setDetail] = useState<{ step: StepId; tab: StepDetailTab } | null>(null),
+    [detail, setDetail] = useState<{ packId: string; step: StepId; tab: StepDetailTab } | null>(
+      null,
+    ),
     [sheet, setSheet] = useState(false),
     [importOpen, setImportOpen] = useState(false),
     [settingsOpen, setSettingsOpen] = useState(false),
@@ -113,11 +115,21 @@ export function ReviewPage() {
         event.preventDefault();
         toggleSidebar();
       }
-      if (event.key.toLowerCase() === 'j' && view?.kind === 'review' && view.next) {
+      if (
+        screen === 'review' &&
+        event.key.toLowerCase() === 'j' &&
+        view?.kind === 'review' &&
+        view.next
+      ) {
         event.preventDefault();
         review.select(view.next);
       }
-      if (event.key.toLowerCase() === 'k' && view?.kind === 'review' && view.previous) {
+      if (
+        screen === 'review' &&
+        event.key.toLowerCase() === 'k' &&
+        view?.kind === 'review' &&
+        view.previous
+      ) {
         event.preventDefault();
         review.select(view.previous);
       }
@@ -126,6 +138,7 @@ export function ReviewPage() {
     return () => window.removeEventListener('keydown', key);
   }, [
     view,
+    screen,
     review.select,
     importOpen,
     settingsOpen,
@@ -137,6 +150,20 @@ export function ReviewPage() {
     sheet,
     toggleSidebar,
   ]);
+  const importer = (
+    <ImportDialog
+      open={importOpen}
+      onOpenChange={setImportOpen}
+      onImport={(value) => {
+        review.replace(value);
+        setScreen('review');
+      }}
+      onDemo={() => {
+        review.loadDemo();
+        setScreen('review');
+      }}
+    />
+  );
   if (review.load.kind === 'loading')
     return (
       <div className="app-loading">
@@ -146,16 +173,25 @@ export function ReviewPage() {
     );
   if (!view || !session)
     return (
-      <main className="app-error">
-        <h1>Could not load review</h1>
-        <p>{review.load.kind === 'error' ? review.load.message : 'No review loaded.'}</p>
-        <Button onClick={review.loadDemo}>Load demo</Button>
-      </main>
+      <>
+        <main className="app-error">
+          <h1>Could not load review</h1>
+          <p>{review.load.kind === 'error' ? review.load.message : 'No review loaded.'}</p>
+          <Button onClick={review.loadDemo}>Load demo</Button>
+          <Button variant="outline" onClick={() => setImportOpen(true)}>
+            Import review
+          </Button>
+        </main>
+        {importer}
+      </>
     );
   const sidebarLabel = sidebarOpen ? 'Close sidebar' : 'Open sidebar';
-  const detailTab = view.kind === 'review' && detail?.step === view.step.id ? detail.tab : 'code';
+  const detailTab =
+    view.kind === 'review' && detail?.packId === session.pack.id && detail.step === view.step.id
+      ? detail.tab
+      : 'code';
   const selectDetail = (tab: StepDetailTab) => {
-    if (view.kind === 'review') setDetail({ step: view.step.id, tab });
+    if (view.kind === 'review') setDetail({ packId: session.pack.id, step: view.step.id, tab });
   };
   const sidebarToggle = (
     <Tooltip>
@@ -272,22 +308,36 @@ export function ReviewPage() {
               </div>
             </div>
             <div className="overview-actions">
-              <Button variant="ghost" onClick={() => setModelsOpen(true)}>
-                Models
-              </Button>
               <Button
                 variant="ghost"
-                onClick={() =>
-                  setPrompt({
-                    kind: 'mapping',
-                    text: agentReviewPrompt(session.pack),
-                  })
-                }
+                disabled={!view.models.length}
+                onClick={() => setModelsOpen(true)}
               >
-                Agent review
+                Models
               </Button>
+              {view.kind === 'review' && screen !== 'evidence' ? (
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    setPrompt({
+                      kind: 'mapping',
+                      text: agentReviewPrompt(session.pack),
+                    })
+                  }
+                >
+                  Agent review
+                </Button>
+              ) : null}
             </div>
           </section>
+          <div className="mobile-review-navigation">
+            <ReviewNavigation
+              label="Mobile review views"
+              primaryLabel={view.primaryLabel}
+              screen={screen}
+              onScreen={setScreen}
+            />
+          </div>
           {view.kind === 'review' ? (
             <Sheet open={sheet} onOpenChange={setSheet}>
               <SheetTrigger asChild>
@@ -305,36 +355,21 @@ export function ReviewPage() {
                   </SheetDescription>
                 </SheetHeader>
                 <FlowList view={view} onSelect={select} />
-                <div className="mobile-secondary-nav">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setScreen('coverage');
-                      setSheet(false);
-                    }}
-                  >
-                    Coverage
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      setScreen('notes');
-                      setSheet(false);
-                    }}
-                  >
-                    Notes
-                  </Button>
-                </div>
               </SheetContent>
             </Sheet>
           ) : null}
-          {screen === 'review' && (view.kind === 'evidence' || review.evidenceSelection) ? (
+          {screen === 'evidence' || (screen === 'review' && view.kind === 'evidence') ? (
             <EvidenceInbox
+              key={session.pack.id}
               view={view}
               session={session}
               selectedId={review.evidenceSelection}
               onOpen={review.open}
-              onBack={review.clearEvidenceSelection}
+              onClearSelection={review.clearEvidenceSelection}
+              onBack={() => {
+                review.clearEvidenceSelection();
+                setScreen('review');
+              }}
               onImport={() => setImportOpen(true)}
               onPrepare={() =>
                 setPrompt({
@@ -358,8 +393,8 @@ export function ReviewPage() {
             <CoverageView
               view={view}
               onSelect={(id) => {
-                review.jump(id);
-                setScreen('review');
+                const destination = review.jump(id);
+                if (destination) setScreen(destination);
               }}
             />
           ) : (
@@ -367,15 +402,7 @@ export function ReviewPage() {
           )}
         </main>
       </div>
-      <ImportDialog
-        open={importOpen}
-        onOpenChange={setImportOpen}
-        onImport={(value) => {
-          review.replace(value);
-          setScreen('review');
-        }}
-        onDemo={review.loadDemo}
-      />
+      {importer}
       <SettingsDialog
         open={preferencesOpen}
         onOpenChange={setPreferencesOpen}
@@ -392,7 +419,14 @@ export function ReviewPage() {
         settings={settings}
         onSave={setSettings}
       />
-      <PromptDialog request={prompt} onClose={() => setPrompt(null)} onApply={review.applyMap} />
+      <PromptDialog
+        request={prompt}
+        onClose={() => setPrompt(null)}
+        onApply={(pack) => {
+          review.applyMap(pack);
+          setScreen('review');
+        }}
+      />
       <FlagDialog
         open={flagOpen}
         onOpenChange={setFlagOpen}

@@ -8,6 +8,7 @@ import {
   type ReviewSession,
   type ReviewState,
   type ReviewStep,
+  type StepId,
 } from './schema';
 
 export function startReview(pack: ReviewPack): ReviewSession {
@@ -82,15 +83,26 @@ export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSes
     (session.pack.pr.head && session.pack.pr.head.sha !== pack.pr.head?.sha)
   )
     throw new Error('The authored review must match the current evidence and pinned commit.');
-  const prior = session.pack.flows
-      .flatMap((flow) => flow.steps)
-      .filter(
-        (step) => session.state.notes[step.id] || session.state.stepStatus[step.id] === 'flag',
-      ),
+  const previousSteps = new Map(
+    session.pack.flows.flatMap((flow) => flow.steps).map((step) => [step.id, step]),
+  );
+  const preserved = new Set<StepId>();
+  const prior = [...previousSteps.values()].filter(
+      (step) => session.state.notes[step.id] || session.state.stepStatus[step.id] === 'flag',
+    ),
     notes: ReviewState['notes'] = {},
     stepStatus: ReviewState['stepStatus'] = {};
   for (const flow of pack.flows)
     for (const step of flow.steps) {
+      const previous = previousSteps.get(step.id);
+      if (previous && JSON.stringify(previous) === JSON.stringify(step)) {
+        preserved.add(step.id);
+        const note = session.state.notes[step.id],
+          status = session.state.stepStatus[step.id];
+        if (note !== undefined) notes[step.id] = note;
+        if (status) stepStatus[step.id] = status;
+        continue;
+      }
       const matches = prior.filter((previous) =>
           previous.blockIds.some((id) => step.blockIds.includes(id)),
         ),
@@ -103,13 +115,22 @@ export function remapReview(session: ReviewSession, pack: ReviewPack): ReviewSes
         stepStatus[step.id] = 'flag';
     }
   const first = hasReviewPlan(pack) ? pack.flows[0] : undefined;
+  const checkpoint = session.state.position;
+  const checkpointFlow = pack.flows.find((flow) =>
+    flow.steps.some((step) => step.id === checkpoint?.step && preserved.has(step.id)),
+  );
   return {
     pack,
     state: {
       ...session.state,
       notes,
       stepStatus,
-      position: first ? { flow: first.id, step: first.steps[0].id } : null,
+      position:
+        checkpoint && checkpointFlow
+          ? { flow: checkpointFlow.id, step: checkpoint.step }
+          : first
+            ? { flow: first.id, step: first.steps[0].id }
+            : null,
       updated: session.state.updated,
     },
   };

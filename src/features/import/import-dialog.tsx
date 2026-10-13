@@ -30,23 +30,32 @@ export function ImportDialog({
     [error, setError] = useState('');
   const request = useRef<AbortController | null>(null);
   useEffect(() => {
-    if (!open) request.current?.abort();
+    if (!open) {
+      request.current?.abort();
+      setPending(false);
+      setError('');
+    }
     return () => request.current?.abort();
   }, [open]);
-  async function perform(operation: () => Promise<ReviewSession>) {
+  async function perform(operation: (signal: AbortSignal) => Promise<ReviewSession>) {
+    request.current?.abort();
+    const current = new AbortController();
+    request.current = current;
     setPending(true);
     setError('');
     try {
-      const session = await operation();
-      if (request.current?.signal.aborted) return;
+      const session = await operation(current.signal);
+      if (current.signal.aborted) return;
       onImport(session);
       onOpenChange(false);
-      toast.success('Review imported.');
+      toast.success(
+        session.pack.mapping === 'evidence' ? 'Evidence imported.' : 'Review imported.',
+      );
     } catch (error) {
-      if (!request.current?.signal.aborted)
+      if (!current.signal.aborted)
         setError(error instanceof Error ? error.message : 'Import failed.');
     } finally {
-      setPending(false);
+      if (request.current === current) setPending(false);
     }
   }
   return (
@@ -69,10 +78,7 @@ export function ImportDialog({
                 event.preventDefault();
                 const value = new FormData(event.currentTarget).get('url');
                 if (typeof value !== 'string') return;
-                request.current = new AbortController();
-                void perform(async () =>
-                  startReview(await importPublicPr(value, request.current?.signal)),
-                );
+                void perform(async (signal) => startReview(await importPublicPr(value, signal)));
               }}
             >
               <label htmlFor="pr-url">Public PR URL</label>
@@ -104,7 +110,6 @@ export function ImportDialog({
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   if (file) {
-                    request.current = new AbortController();
                     void perform(() => importReviewFile(file));
                   }
                 }}
@@ -118,7 +123,6 @@ export function ImportDialog({
                 event.preventDefault();
                 const raw = new FormData(event.currentTarget).get('diff');
                 if (typeof raw !== 'string') return;
-                request.current = new AbortController();
                 void perform(async () => startReview(importDiff(raw)));
               }}
             >

@@ -15,6 +15,8 @@ This module owns evidence identity, flow integrity, review transitions, coverage
 - A step can be marked reviewed or flagged only after all available blocks are opened. Missing patches block inspection.
 - Shared evidence counts once in coverage. A flag remains until every referencing flagged step is resolved.
 - Replacing a plan requires the same evidence snapshot and pinned head. It carries notes and flags by overlapping evidence IDs. New flow steps require a fresh review.
+- Unchanged step definitions retain their notes, inspection status and checkpoint when a plan is updated. Changed steps require a fresh review. Reimporting an unchanged plan does not prefix notes again.
+- Source fingerprints use a fixed English path ordering so browser and CLI locale settings cannot change the checksum.
 - Inspected code is not PR approval.
 
 Adapters import the public `index.ts`. Internal files are private to this owner. CI checks the dependency boundary and the absence of browser, React, and persistence APIs in this module.

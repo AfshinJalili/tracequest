@@ -10,6 +10,8 @@
 
 `src/features` composes each user task with React. Components display domain values. The review controller calls domain transitions and persistence; it does not define inspection rules. `src/components/ui` contains official shadcn primitives. `src/app` owns routing.
 
+Review navigation owns the desktop and mobile view choices. Unmapped evidence is an explicit screen; choosing a file or page clears the highlighted block without closing the browser. Each import owns its cancellation controller, so a late response cannot replace a newer review. Source-context and model responses also check their own cancellation state. The request-signal adapter combines caller cancellation with the service deadline.
+
 Evidence intake and authored review are two stages in the existing review domain. An evidence pack has no flows and a null checkpoint. `reviewView` returns a discriminated union: only the review branch exposes a selected step, navigation, and inspection eligibility. The evidence branch supplies grouped files, coverage, missing context, and explicit unmapped reasons. The UI can therefore render raw code without pretending it is a review plan.
 
 A placeholder flow for raw imports was considered. It would make file chunks look like behavior steps and require fabricated explanations. A separate evidence business domain would duplicate source identity and persistence. Keeping stages in the owning review module costs less to maintain and makes promotion explicit. Candidate and patch-only AI mapping code was deleted, including its model adapter. Curated legacy backups and the shipped demo remain compatible; new authored plans have stricter metadata and source checks.

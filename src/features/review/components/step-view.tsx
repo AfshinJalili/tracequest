@@ -75,14 +75,14 @@ export function StepView({
               : view.step.kind}
         </span>
       </div>
-      <p className="desktop-step-summary">{view.step.summary}</p>
+      {detailTab !== 'summary' ? <p className="desktop-step-summary">{view.step.summary}</p> : null}
       <div className="model-tokens">
         {view.entities.map((entity) => (
           <span key={entity}>{entity}</span>
         ))}
       </div>
       <Tabs
-        key={view.step.id}
+        key={session.pack.id + ':' + (session.pack.pr.head?.sha ?? '') + ':' + view.step.id}
         value={detailTab}
         onValueChange={(tab) => {
           if (tab === 'summary' || tab === 'code' || tab === 'ask') onDetailTabChange(tab);
@@ -119,7 +119,7 @@ export function StepView({
           </div>
           <ContextCode session={session} step={view.step} />
         </TabsContent>
-        <TabsContent value="ask">
+        <TabsContent value="ask" forceMount hidden={detailTab !== 'ask'}>
           <AiComposer
             session={session}
             step={view.step}
@@ -127,6 +127,7 @@ export function StepView({
             onSettings={onSettings}
             onPrompt={onPrompt}
             questionInput={questionInput}
+            active={detailTab === 'ask'}
           />
         </TabsContent>
       </Tabs>

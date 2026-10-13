@@ -10,7 +10,7 @@ export function sourceFingerprint(pack: Pick<ReviewPack, 'pr' | 'files' | 'sourc
       pack.pr.head?.sha ?? null,
       pack.pr.base?.sha ?? null,
       pack.files,
-      Object.entries(pack.sources).sort(([a], [b]) => a.localeCompare(b)),
+      Object.entries(pack.sources).sort(([a], [b]) => a.localeCompare(b, 'en')),
     ]),
   );
 }
