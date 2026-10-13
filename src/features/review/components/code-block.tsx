@@ -14,52 +14,8 @@ import {
 } from '@/domains/review';
 import { loadSourceContext } from '@/integrations/github';
 import { copyText } from '@/integrations/files';
+import { CodeSnippet } from '@/components/code-snippet';
 
-function HighlightedLine({ text }: { text: string }) {
-  const tokens = text.split(
-    /(\/\/.*$|'[^']*'|"[^"]*"|\b(?:if|return|const|await|let|new|undefined|async|throw|try|catch|export|class|private)\b|\b(?:Session|User|Order|StockLevel|RequestContext)\b)/g,
-  );
-  return (
-    <>
-      {tokens.map((token, index) => (
-        <span
-          key={index}
-          className={
-            token.startsWith('//')
-              ? 'syntax-comment'
-              : token.startsWith("'") || token.startsWith('"')
-                ? 'syntax-string'
-                : /^(if|return|const|await|let|new|undefined|async|throw|try|catch|export|class|private)$/.test(
-                      token,
-                    )
-                  ? 'syntax-keyword'
-                  : /^(Session|User|Order|StockLevel|RequestContext)$/.test(token)
-                    ? 'syntax-type'
-                    : undefined
-          }
-        >
-          {token}
-        </span>
-      ))}
-    </>
-  );
-}
-function CodeRows({ rows }: { rows: CodeRow[] }) {
-  return (
-    <div className="code-rows" role="region" aria-label="Source code" tabIndex={0}>
-      {rows.map((row, index) => (
-        <div key={index} className={'code-row ' + row.change}>
-          <span className="line-number" aria-hidden="true">
-            {row.number ?? ''}
-          </span>
-          <code>
-            <HighlightedLine text={row.text} />
-          </code>
-        </div>
-      ))}
-    </div>
-  );
-}
 export function EvidenceCode({
   block,
   session,
@@ -110,7 +66,7 @@ export function EvidenceCode({
         {block.missing ? (
           <p className="missing-code">{block.code}</p>
         ) : (
-          <CodeRows rows={block.rows} />
+          <CodeSnippet rows={block.rows} />
         )}
         <div className="code-footer">
           <span>Unified diff</span>
@@ -170,7 +126,7 @@ export function ContextCode({ session, step }: { session: ReviewSession; step: R
       </CollapsibleTrigger>
       <CollapsibleContent>
         {result.kind === 'ready' ? (
-          <CodeRows rows={codeRows(result.source, step.context.start, 'source')} />
+          <CodeSnippet rows={codeRows(result.source, step.context.start, 'source')} />
         ) : result.kind === 'error' ? (
           <p role="alert">{result.message}</p>
         ) : (
