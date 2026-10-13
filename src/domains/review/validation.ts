@@ -1,5 +1,13 @@
 import { parseEvidence, hash } from './evidence';
-import { MAX_AUTHORED_STEPS, packSchema, type ReviewPack } from './schema';
+import { MAX_AUTHORED_STEPS, packSchema, type ReviewPack, type ReviewStep } from './schema';
+
+function validateSourceReference(pack: ReviewPack, context: NonNullable<ReviewStep['context']>) {
+  const source = pack.sources[context.path];
+  if (source === undefined)
+    throw new Error('Authored steps must include their pinned source context.');
+  if (source !== undefined && context.end > source.split('\n').length)
+    throw new Error('Source context range is outside the included snapshot.');
+}
 
 export function hasReviewPlan(pack: ReviewPack): boolean {
   return pack.mapping === 'authored' || pack.mapping === 'curated';
@@ -47,13 +55,7 @@ export function validatePack(input: unknown): ReviewPack {
       if (step.blockIds.some((id) => !blocks.has(id)))
         throw new Error('Review references missing evidence.');
       step.blockIds.forEach((id) => assigned.add(id));
-      if (step.context && pack.mapping === 'authored') {
-        const source = pack.sources[step.context.path];
-        if (source === undefined)
-          throw new Error('Authored steps must include their pinned source context.');
-        if (source !== undefined && step.context.end > source.split('\n').length)
-          throw new Error('Source context range is outside the included snapshot.');
-      }
+      if (step.context && pack.mapping === 'authored') validateSourceReference(pack, step.context);
     }
   if (pack.mapping === 'evidence' && pack.flows.length)
     throw new Error('Evidence intake cannot contain review flows.');
